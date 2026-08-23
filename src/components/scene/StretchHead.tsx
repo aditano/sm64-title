@@ -64,8 +64,6 @@ export function StretchHead() {
   const { camera, gl } = useThree();
   const resetToken = useFaceStore((s) => s.resetToken);
   const holdStretch = useFaceStore((s) => s.holdStretch);
-  const setGrabbing = useFaceStore((s) => s.setGrabbing);
-
   useEffect(() => {
     const mesh = meshRef.current;
     if (!mesh) return;
@@ -143,7 +141,6 @@ export function StretchHead() {
   useEffect(() => {
     const el = gl.domElement;
     el.style.touchAction = "none";
-    el.style.cursor = "none";
 
     const onDown = (e: PointerEvent) => {
       const mesh = meshRef.current;
@@ -172,7 +169,6 @@ export function StretchHead() {
         base: new Float32Array(pos.array as Float32Array),
         radius: 0.78,
       };
-      setGrabbing(true);
     };
 
     const onMove = (e: PointerEvent) => {
@@ -222,7 +218,6 @@ export function StretchHead() {
         /* already released */
       }
       grabRef.current = null;
-      setGrabbing(false);
     };
 
     el.addEventListener("pointerdown", onDown);
@@ -235,7 +230,7 @@ export function StretchHead() {
       el.removeEventListener("pointerup", onUp);
       el.removeEventListener("pointercancel", onUp);
     };
-  }, [camera, gl, setGrabbing]);
+  }, [camera, gl]);
 
   useFrame((_, dt) => {
     const d = Math.min(dt, 0.05);

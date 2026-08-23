@@ -3,7 +3,6 @@ import { Suspense, useLayoutEffect } from "react";
 import * as THREE from "three";
 import { StretchHead } from "./StretchHead";
 import { World } from "./World";
-import { GloveCursor } from "./GloveCursor";
 
 /** Castle Grounds skybox clear / fog tones from SM64 outside areas. */
 const SKY_CLEAR = "#6eb8e8";
@@ -72,7 +71,6 @@ export function TitleScene() {
       <Suspense fallback={null}>
         <World />
         <StretchHead />
-        <GloveCursor />
       </Suspense>
     </Canvas>
   );
