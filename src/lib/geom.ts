@@ -93,10 +93,13 @@ export function plumber(
   const hatHemi = new THREE.SphereGeometry(0.8, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.5);
   parts.push(tint(place(hatHemi, 0, 0.38 * tall, -0.08, 1.12, 0.82, 1.06), hat));
   parts.push(tint(place(torus(0.78, 0.08, 6, 14), 0, 0.32 * tall, 0.18, 1.05, 1, 1.15, Math.PI / 2), hat));
-  parts.push(tint(place(disc(0.2, 10), 0, 0.52 * tall, 0.7), emblem));
-  parts.push(tint(place(box(0.045, 0.16, 0.03), -0.055, 0.54 * tall, 0.72), hat));
-  parts.push(tint(place(box(0.045, 0.16, 0.03), 0.055, 0.54 * tall, 0.72), hat));
-  parts.push(tint(place(box(0.04, 0.1, 0.03), 0, 0.51 * tall, 0.72, 1, 1, 1, 0, 0, 0.55), hat));
+  // Emblem sits on the hat dome — pull forward so the cap surface doesn't clip it.
+  const emblemZ = 0.82;
+  const emblemY = 0.54 * tall;
+  parts.push(tint(place(disc(0.2, 10), 0, emblemY, emblemZ), emblem));
+  parts.push(tint(place(box(0.045, 0.16, 0.03), -0.055, emblemY + 0.02 * tall, emblemZ + 0.02), emblem));
+  parts.push(tint(place(box(0.045, 0.16, 0.03), 0.055, emblemY + 0.02 * tall, emblemZ + 0.02), emblem));
+  parts.push(tint(place(box(0.04, 0.1, 0.03), 0, emblemY - 0.03 * tall, emblemZ + 0.02, 1, 1, 1, 0, 0, 0.55), emblem));
 
   return {
     parts,
