@@ -45,7 +45,7 @@ export function GloveCursor() {
   useFrame(() => {
     const g = ref.current;
     if (!g || hidden) return;
-    _pt.set(pointer.x, pointer.y, 0.68);
+    _pt.set(pointer.x, pointer.y, 0.55);
     _pt.unproject(camera);
     g.position.lerp(_pt, 0.45);
     g.lookAt(camera.position);
@@ -60,7 +60,7 @@ export function GloveCursor() {
   const curl = grabbing ? 1 : 0;
 
   return (
-    <group ref={ref} renderOrder={10}>
+    <group ref={ref} renderOrder={10} scale={0.52}>
       <mesh>
         <boxGeometry args={[0.19, 0.2, 0.09]} />
         <meshLambertMaterial color={GLOVE} flatShading />

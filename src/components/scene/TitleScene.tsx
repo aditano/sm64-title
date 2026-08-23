@@ -37,12 +37,12 @@ function CameraRig() {
   useLayoutEffect(() => {
     const portrait = size.height / Math.max(size.width, 1) > 1.15;
     const cam = camera as THREE.PerspectiveCamera;
-    // SM64 menu frustum is 45°; title screen sits slightly closer than gameplay.
-    cam.position.set(0, portrait ? 2.55 : 2.05, portrait ? 10.2 : 7.6);
+    // SM64 menu frustum is 45°; pull in closer so Mario fills the frame like the original.
+    cam.position.set(0, portrait ? 2.35 : 1.85, portrait ? 8.4 : 6.1);
     cam.fov = 45;
     cam.near = 0.1;
     cam.far = 200;
-    cam.lookAt(0, portrait ? 1.75 : 1.45, 0);
+    cam.lookAt(0, portrait ? 1.68 : 1.38, 0);
     cam.updateProjectionMatrix();
   }, [camera, size.height, size.width]);
   return null;
@@ -52,7 +52,7 @@ export function TitleScene() {
   return (
     <Canvas
       className="h-full w-full touch-none"
-      camera={{ position: [0, 2.05, 7.6], fov: 45, near: 0.1, far: 200 }}
+      camera={{ position: [0, 1.85, 6.1], fov: 45, near: 0.1, far: 200 }}
       dpr={[1, 1.25]}
       shadows
       gl={{
