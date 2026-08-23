@@ -14,13 +14,13 @@ export const Route = createRootRoute({
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1, maximum-scale=1" },
       { title: APP_NAME },
-      { name: "description", content: "Grab and stretch a Nintendo face on the Super Mario 64 title screen." },
+      { name: "description", content: "The classic Super Mario 64 title screen — stretch Mario's face in Peach's Castle courtyard." },
       { name: "apple-mobile-web-app-title", content: APP_NAME },
-      { name: "theme-color", content: "#4ea4dc" },
+      { name: "theme-color", content: "#6eb8e8" },
       { name: "twitter:card", content: "summary_large_image" },
       { property: "og:type", content: "x:game" },
       { property: "og:title", content: APP_NAME },
-      { property: "og:description", content: "The classic face-stretch title screen — now with the whole Nintendo roster." },
+      { property: "og:description", content: "The classic face-stretch title screen from Super Mario 64, recreated in the browser." },
       ...(ogImage
         ? [
             { property: "og:image", content: ogImage },

@@ -8,7 +8,7 @@ export type EyeSpec = {
   pupil?: number;
 };
 
-export function tint(geo: THREE.BufferGeometry, hex: string, jitter = 0.055) {
+export function tint(geo: THREE.BufferGeometry, hex: string, jitter = 0.02) {
   const c = new THREE.Color(hex);
   const pos = geo.getAttribute("position");
   const cols = new Float32Array(pos.count * 3);
@@ -43,14 +43,14 @@ export function place(
   return geo;
 }
 
-export const sph = (r: number, w = 18, h = 14) => new THREE.SphereGeometry(r, w, h);
+export const sph = (r: number, w = 12, h = 10) => new THREE.SphereGeometry(r, w, h);
 export const box = (w: number, h: number, d: number) => new THREE.BoxGeometry(w, h, d);
-export const cone = (r: number, h: number, s = 12) => new THREE.ConeGeometry(r, h, s);
-export const cyl = (rt: number, rb: number, h: number, s = 14) =>
+export const cone = (r: number, h: number, s = 8) => new THREE.ConeGeometry(r, h, s);
+export const cyl = (rt: number, rb: number, h: number, s = 10) =>
   new THREE.CylinderGeometry(rt, rb, h, s);
-export const torus = (r: number, t: number, rs = 8, ts = 18) =>
+export const torus = (r: number, t: number, rs = 6, ts = 12) =>
   new THREE.TorusGeometry(r, t, rs, ts);
-export const disc = (r: number, s = 16) => new THREE.CircleGeometry(r, s);
+export const disc = (r: number, s = 10) => new THREE.CircleGeometry(r, s);
 
 export function mergeParts(parts: THREE.BufferGeometry[]) {
   const merged = mergeGeometries(parts, false);
@@ -64,36 +64,36 @@ export function plumber(
   skin: string,
   hat: string,
   emblem = "#F4F4F4",
-  stash = "#3A2418",
+  stash = "#4A2810",
   opts?: { tall?: boolean; bigNose?: boolean; zigzag?: boolean },
 ) {
   const parts: THREE.BufferGeometry[] = [];
   const tall = opts?.tall ? 1.12 : 1;
-  const noseR = opts?.bigNose ? 0.34 : 0.26;
-  const noseZ = opts?.bigNose ? 0.72 : 0.68;
+  const noseR = opts?.bigNose ? 0.34 : 0.28;
+  const noseZ = opts?.bigNose ? 0.72 : 0.7;
 
-  parts.push(tint(place(sph(0.74, 32, 24), 0, 0.02, 0, 1.08, tall * 0.98, 0.94), skin, 0.03));
-  parts.push(tint(place(sph(0.17, 12, 10), -0.72, 0.04, 0.06, 0.5, 1.05, 0.95), skin));
-  parts.push(tint(place(sph(0.17, 12, 10), 0.72, 0.04, 0.06, 0.5, 1.05, 0.95), skin));
-  parts.push(tint(place(sph(noseR + 0.04, 18, 14), 0, -0.08, noseZ + 0.04), skin));
-  parts.push(tint(place(sph(0.3, 12, 10), 0, -0.46 * tall, 0.26, 1.18, 0.66, 0.78), skin));
+  parts.push(tint(place(sph(0.74, 16, 12), 0, 0.02, 0, 1.08, tall * 0.98, 0.94), skin));
+  parts.push(tint(place(sph(0.17, 8, 6), -0.72, 0.04, 0.06, 0.5, 1.05, 0.95), skin));
+  parts.push(tint(place(sph(0.17, 8, 6), 0.72, 0.04, 0.06, 0.5, 1.05, 0.95), skin));
+  parts.push(tint(place(sph(noseR + 0.04, 10, 8), 0, -0.08, noseZ + 0.04), skin));
+  parts.push(tint(place(sph(0.3, 8, 6), 0, -0.46 * tall, 0.26, 1.18, 0.66, 0.78), skin));
 
   if (opts?.zigzag) {
     for (const x of [-0.34, -0.12, 0.12, 0.34]) {
-      parts.push(tint(place(sph(0.13, 10, 8), x, -0.16, 0.58, 1.1, 0.55, 0.72), stash));
+      parts.push(tint(place(sph(0.13, 8, 6), x, -0.16, 0.58, 1.1, 0.55, 0.72), stash));
     }
   } else {
-    parts.push(tint(place(sph(0.22, 14, 10), -0.22, -0.2, 0.6, 1.45, 0.48, 0.72), stash));
-    parts.push(tint(place(sph(0.22, 14, 10), 0.22, -0.2, 0.6, 1.45, 0.48, 0.72), stash));
+    parts.push(tint(place(sph(0.22, 10, 8), -0.22, -0.2, 0.6, 1.45, 0.48, 0.72), stash));
+    parts.push(tint(place(sph(0.22, 10, 8), 0.22, -0.2, 0.6, 1.45, 0.48, 0.72), stash));
   }
 
-  parts.push(tint(place(sph(0.16, 10, 8), -0.52, -0.04, 0.28, 0.55, 1.15, 0.7), stash));
-  parts.push(tint(place(sph(0.16, 10, 8), 0.52, -0.04, 0.28, 0.55, 1.15, 0.7), stash));
+  parts.push(tint(place(sph(0.16, 8, 6), -0.52, -0.04, 0.28, 0.55, 1.15, 0.7), stash));
+  parts.push(tint(place(sph(0.16, 8, 6), 0.52, -0.04, 0.28, 0.55, 1.15, 0.7), stash));
 
-  const hatHemi = new THREE.SphereGeometry(0.8, 26, 16, 0, Math.PI * 2, 0, Math.PI * 0.5);
+  const hatHemi = new THREE.SphereGeometry(0.8, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.5);
   parts.push(tint(place(hatHemi, 0, 0.38 * tall, -0.08, 1.12, 0.82, 1.06), hat));
-  parts.push(tint(place(torus(0.78, 0.08, 8, 28), 0, 0.32 * tall, 0.18, 1.05, 1, 1.15, Math.PI / 2), hat));
-  parts.push(tint(place(disc(0.2, 18), 0, 0.52 * tall, 0.7), emblem));
+  parts.push(tint(place(torus(0.78, 0.08, 6, 14), 0, 0.32 * tall, 0.18, 1.05, 1, 1.15, Math.PI / 2), hat));
+  parts.push(tint(place(disc(0.2, 10), 0, 0.52 * tall, 0.7), emblem));
   parts.push(tint(place(box(0.045, 0.16, 0.03), -0.055, 0.54 * tall, 0.72), hat));
   parts.push(tint(place(box(0.045, 0.16, 0.03), 0.055, 0.54 * tall, 0.72), hat));
   parts.push(tint(place(box(0.04, 0.1, 0.03), 0, 0.51 * tall, 0.72, 1, 1, 1, 0, 0, 0.55), hat));
@@ -101,8 +101,8 @@ export function plumber(
   return {
     parts,
     eyes: [
-      { position: [-0.24, 0.14 * tall, 0.6] as [number, number, number], scale: [0.17, 0.22, 0.1] as [number, number, number], iris: "#2A5CAA" },
-      { position: [0.24, 0.14 * tall, 0.6] as [number, number, number], scale: [0.17, 0.22, 0.1] as [number, number, number], iris: "#2A5CAA" },
+      { position: [-0.24, 0.14 * tall, 0.6] as [number, number, number], scale: [0.17, 0.22, 0.1] as [number, number, number], iris: "#2060C0" },
+      { position: [0.24, 0.14 * tall, 0.6] as [number, number, number], scale: [0.17, 0.22, 0.1] as [number, number, number], iris: "#2060C0" },
     ],
   };
 }

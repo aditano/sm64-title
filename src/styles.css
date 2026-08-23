@@ -1,12 +1,13 @@
 @import "tailwindcss";
 
 @theme {
+  /* SM64 NTSC title-screen palette (Castle Grounds skybox + HUD) */
   --font-display: "Lilita One", "Impact", "Arial Black", system-ui, sans-serif;
   --font-ui: "Nunito", "Trebuchet MS", system-ui, sans-serif;
 
-  --color-sky: #4ea4dc;
-  --color-sky-deep: #2f7fbe;
-  --color-lawn: #4cae4a;
+  --color-sky: #6eb8e8;
+  --color-sky-deep: #4a9fd4;
+  --color-lawn: #58b848;
   --color-cream: #f4e6c3;
   --color-ink: #2a1c12;
   --color-wood: #6b3b1d;
@@ -16,7 +17,7 @@
   --color-gold-deep: #c89214;
   --color-menu: #ffe14a;
   --color-select: #fff38a;
-  --color-roof: #c31b2a;
+  --color-roof: #d42020;
   --color-stone: #8d8880;
   --color-glove: #f6f1e6;
 
@@ -64,36 +65,75 @@
   }
 }
 
-@keyframes rise-in {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.logo-3d {
+/* SM64 title logo — red lettering with gold drop-shadow extrusion */
+.sm64-logo {
   font-family: var(--font-display);
-  letter-spacing: 0.02em;
-  line-height: 0.86;
+  line-height: 0.82;
   text-transform: uppercase;
-  filter: drop-shadow(0 3px 0 #7a140c) drop-shadow(0 7px 0 #f0c43a)
-    drop-shadow(0 10px 0 #b47a12);
+  letter-spacing: 0.01em;
+  width: fit-content;
 }
 
+.sm64-logo-super {
+  font-size: clamp(1.15rem, 3.8vw, 2.15rem);
+  color: #e42020;
+  text-shadow:
+    0 2px 0 #9a1010,
+    0 4px 0 #f0c43a,
+    0 6px 0 #b47a12,
+    0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.sm64-logo-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.2em;
+}
+
+.sm64-logo-mario {
+  font-size: clamp(2rem, 7.5vw, 4.75rem);
+  color: #e42020;
+  text-shadow:
+    0 3px 0 #9a1010,
+    0 6px 0 #f0c43a,
+    0 9px 0 #b47a12,
+    0 2px 3px rgba(0, 0, 0, 0.35);
+}
+
+.sm64-logo-sixtyfour {
+  position: relative;
+  font-size: clamp(1.55rem, 5.5vw, 3.5rem);
+  color: #f6d44a;
+  padding-bottom: 0.08em;
+  text-shadow:
+    0 2px 0 #9a1010,
+    0 4px 0 #c89214,
+    0 6px 0 #7a4a08,
+    0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+.sm64-logo-tm {
+  position: absolute;
+  top: -0.15em;
+  right: -1.4em;
+  font-size: 0.28em;
+  color: #fff;
+  letter-spacing: 0;
+  text-shadow:
+    0 1px 0 #9a1010,
+    0 0 2px #9a1010;
+}
+
+/* PRESS START — yellow N64 menu text with red outline */
 .press-start {
+  color: #ffe800;
+  text-shadow:
+    -2px -2px 0 #9a1010,
+    2px -2px 0 #9a1010,
+    -2px 2px 0 #9a1010,
+    2px 2px 0 #9a1010,
+    0 3px 0 #6a0808;
   animation: blink-start 1.35s steps(1) infinite;
-}
-
- .dock-scroll {
-  scrollbar-width: none;
-  touch-action: pan-x;
-}
-.dock-scroll::-webkit-scrollbar {
-  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

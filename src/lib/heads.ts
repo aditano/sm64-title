@@ -9,7 +9,7 @@ export type BuiltHead = {
 type Kit = { parts: THREE.BufferGeometry[]; eyes: EyeSpec[] };
 
 function mario(): Kit {
-  return plumber("#E39B6B", "#E52521");
+  return plumber("#E8A060", "#E42020");
 }
 
 function luigi(): Kit {

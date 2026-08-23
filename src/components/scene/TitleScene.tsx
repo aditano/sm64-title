@@ -4,25 +4,29 @@ import * as THREE from "three";
 import { StretchHead } from "./StretchHead";
 import { World } from "./World";
 import { GloveCursor } from "./GloveCursor";
-import { useFaceStore } from "@/lib/face-store";
+
+/** Castle Grounds skybox clear / fog tones from SM64 outside areas. */
+const SKY_CLEAR = "#6eb8e8";
+const FOG_COLOR = "#8ec8e8";
 
 function Lights() {
   return (
     <>
-      <hemisphereLight args={["#c5e4ff", "#6a9a45", 1.05]} />
-      <ambientLight intensity={0.48} />
+      <hemisphereLight args={["#b8dcff", "#4a9a38", 0.85]} />
+      <ambientLight intensity={0.42} />
       <directionalLight
-        position={[10, 16, 10]}
-        intensity={1.25}
+        position={[8, 14, 6]}
+        intensity={1.1}
+        color="#fff8e8"
         castShadow
-        shadow-mapSize-width={1024}
-        shadow-mapSize-height={1024}
+        shadow-mapSize-width={512}
+        shadow-mapSize-height={512}
         shadow-camera-near={2}
         shadow-camera-far={80}
-        shadow-camera-left={-18}
-        shadow-camera-right={18}
-        shadow-camera-top={18}
-        shadow-camera-bottom={-10}
+        shadow-camera-left={-16}
+        shadow-camera-right={16}
+        shadow-camera-top={16}
+        shadow-camera-bottom={-8}
       />
     </>
   );
@@ -33,41 +37,41 @@ function CameraRig() {
   useLayoutEffect(() => {
     const portrait = size.height / Math.max(size.width, 1) > 1.15;
     const cam = camera as THREE.PerspectiveCamera;
-    cam.position.set(0, portrait ? 2.85 : 2.25, portrait ? 11.4 : 8.8);
-    cam.fov = portrait ? 54 : 42;
+    // SM64 menu frustum is 45°; title screen sits slightly closer than gameplay.
+    cam.position.set(0, portrait ? 2.55 : 2.05, portrait ? 10.2 : 7.6);
+    cam.fov = 45;
     cam.near = 0.1;
-    cam.far = 220;
-    cam.lookAt(0, portrait ? 1.95 : 1.6, 0);
+    cam.far = 200;
+    cam.lookAt(0, portrait ? 1.75 : 1.45, 0);
     cam.updateProjectionMatrix();
   }, [camera, size.height, size.width]);
   return null;
 }
 
 export function TitleScene() {
-  const characterId = useFaceStore((s) => s.characterId);
-
   return (
     <Canvas
       className="h-full w-full touch-none"
-      camera={{ position: [0, 2.25, 8.8], fov: 42, near: 0.1, far: 220 }}
-      dpr={[1, 1.5]}
+      camera={{ position: [0, 2.05, 7.6], fov: 45, near: 0.1, far: 200 }}
+      dpr={[1, 1.25]}
       shadows
       gl={{
-        antialias: true,
+        antialias: false,
         toneMapping: THREE.NoToneMapping,
         alpha: false,
       }}
       onCreated={({ gl }) => {
-        gl.setClearColor("#5eb3e8");
+        gl.setClearColor(SKY_CLEAR);
         gl.domElement.style.touchAction = "none";
+        gl.domElement.style.imageRendering = "pixelated";
       }}
     >
-      <fog attach="fog" args={["#9ad0ee", 48, 130]} />
+      <fog attach="fog" args={[FOG_COLOR, 38, 95]} />
       <CameraRig />
       <Lights />
       <Suspense fallback={null}>
         <World />
-        <StretchHead characterId={characterId} />
+        <StretchHead />
         <GloveCursor />
       </Suspense>
     </Canvas>

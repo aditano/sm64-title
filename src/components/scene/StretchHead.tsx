@@ -12,7 +12,6 @@ const _world = new THREE.Vector3();
 const _look = new THREE.Vector3();
 const _plane = new THREE.Plane();
 const _target = new THREE.Vector3();
-const _grabRest = new THREE.Vector3();
 const _eyeOff = new THREE.Vector3();
 
 type Grab = {
@@ -50,10 +49,11 @@ function closestVertex(rest: Float32Array, count: number, p: THREE.Vector3) {
   return best;
 }
 
-export function StretchHead({ characterId }: { characterId: string }) {
+/** Original SM64 title screen only featured Mario's head. */
+export function StretchHead() {
   const groupRef = useRef<THREE.Group>(null);
   const meshRef = useRef<THREE.Mesh>(null);
-  const built = useMemo(() => buildHead(characterId), [characterId]);
+  const built = useMemo(() => buildHead("mario"), []);
   const restRef = useRef<Float32Array>(new Float32Array(0));
   const velRef = useRef<Float32Array>(new Float32Array(0));
   const grabRef = useRef<Grab | null>(null);
@@ -87,19 +87,19 @@ export function StretchHead({ characterId }: { characterId: string }) {
         eg.userData.eye = true;
         eg.position.set(...spec.position);
         const white = new THREE.Mesh(
-          new THREE.SphereGeometry(1, 14, 12),
-          new THREE.MeshLambertMaterial({ color: "#F7F4EE" }),
+          new THREE.SphereGeometry(1, 10, 8),
+          new THREE.MeshLambertMaterial({ color: "#F7F4EE", flatShading: true }),
         );
         white.scale.set(...spec.scale);
         const iris = new THREE.Mesh(
-          new THREE.SphereGeometry(0.45, 12, 10),
-          new THREE.MeshLambertMaterial({ color: spec.iris }),
+          new THREE.SphereGeometry(0.45, 8, 6),
+          new THREE.MeshLambertMaterial({ color: spec.iris, flatShading: true }),
         );
         iris.position.z = spec.scale[2] * 0.85;
         iris.scale.setScalar(spec.scale[0] * (spec.pupil ?? 0.85));
         const pupil = new THREE.Mesh(
-          new THREE.SphereGeometry(0.22, 10, 8),
-          new THREE.MeshLambertMaterial({ color: "#1A1410" }),
+          new THREE.SphereGeometry(0.22, 6, 5),
+          new THREE.MeshLambertMaterial({ color: "#1A1410", flatShading: true }),
         );
         pupil.position.z = spec.scale[2] * 1.15;
         pupil.scale.setScalar(spec.scale[0] * 0.55);
@@ -235,7 +235,7 @@ export function StretchHead({ characterId }: { characterId: string }) {
       el.removeEventListener("pointerup", onUp);
       el.removeEventListener("pointercancel", onUp);
     };
-  }, [camera, gl, setGrabbing, characterId]);
+  }, [camera, gl, setGrabbing]);
 
   useFrame((_, dt) => {
     const d = Math.min(dt, 0.05);
@@ -292,7 +292,7 @@ export function StretchHead({ characterId }: { characterId: string }) {
     () =>
       new THREE.MeshLambertMaterial({
         vertexColors: true,
-        flatShading: false,
+        flatShading: true,
       }),
     [],
   );
@@ -300,7 +300,7 @@ export function StretchHead({ characterId }: { characterId: string }) {
   useEffect(() => () => material.dispose(), [material]);
 
   return (
-    <group ref={groupRef} position={[0, 1.05, 0.1]} scale={1.06}>
+    <group ref={groupRef} position={[0, 1.02, 0.05]} scale={1.02}>
       <mesh ref={meshRef} material={material} castShadow geometry={built.geometry} />
     </group>
   );
