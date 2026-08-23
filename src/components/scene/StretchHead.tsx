@@ -300,7 +300,7 @@ export function StretchHead() {
   useEffect(() => () => material.dispose(), [material]);
 
   return (
-    <group ref={groupRef} position={[0, 1.02, 0.05]} scale={1.02}>
+    <group ref={groupRef} position={[0, 1.86, 0.08]} scale={1.02}>
       <mesh ref={meshRef} material={material} castShadow geometry={built.geometry} />
     </group>
   );
