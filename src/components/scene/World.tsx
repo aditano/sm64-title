@@ -1,284 +1,269 @@
 import { useLayoutEffect, useMemo } from "react";
-import { useTexture } from "@react-three/drei";
+import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
+import { disposeWorldTextures, makeWorldTextures } from "@/lib/n64-textures";
+import { gameTime } from "@/lib/game-clock";
 
-function prep(tex: THREE.Texture, repeatX = 1, repeatY = 1) {
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.wrapS = THREE.RepeatWrapping;
-  tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(repeatX, repeatY);
-  tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestFilter;
-  tex.generateMipmaps = false;
-  return tex;
-}
-
-function Flag({ position, scale = 1 }: { position: [number, number, number]; scale?: number }) {
+function Flag({ position }: { position: [number, number, number] }) {
   return (
-    <group position={position} scale={scale}>
-      <mesh position={[0, 0.7, 0]} castShadow>
-        <cylinderGeometry args={[0.04, 0.045, 1.45, 6]} />
+    <group position={position}>
+      <mesh position={[0, 0.55, 0]}>
+        <cylinderGeometry args={[0.035, 0.04, 1.15, 6]} />
         <meshLambertMaterial color="#e8d9a8" flatShading />
       </mesh>
-      <mesh position={[0.32, 1.18, 0]} rotation={[0, 0, -0.12]} castShadow>
-        <boxGeometry args={[0.64, 0.28, 0.04]} />
+      <mesh position={[0.28, 0.95, 0]} rotation={[0, 0, -0.08]}>
+        <boxGeometry args={[0.56, 0.26, 0.03]} />
         <meshLambertMaterial color="#d42020" flatShading />
       </mesh>
-      <mesh position={[0.48, 1.18, 0]}>
-        <boxGeometry args={[0.28, 0.28, 0.045]} />
+      <mesh position={[0.42, 0.95, 0.02]}>
+        <circleGeometry args={[0.08, 8]} />
         <meshLambertMaterial color="#f4f4f4" flatShading />
       </mesh>
     </group>
   );
 }
 
-function RoundTree({ position, scale = 1 }: { position: [number, number, number]; scale?: number }) {
+function MushroomWindow({
+  position,
+  scale = 1,
+}: {
+  position: [number, number, number];
+  scale?: number;
+}) {
   return (
     <group position={position} scale={scale}>
-      <mesh position={[0, 0.55, 0]} castShadow>
-        <cylinderGeometry args={[0.16, 0.22, 1.1, 6]} />
-        <meshLambertMaterial color="#7a4a22" flatShading />
+      <mesh>
+        <circleGeometry args={[0.42, 10]} />
+        <meshLambertMaterial color="#c4a056" flatShading />
       </mesh>
-      <mesh position={[0, 1.7, 0]} castShadow>
-        <sphereGeometry args={[1.05, 8, 6]} />
-        <meshLambertMaterial color="#2f9a38" flatShading />
+      <mesh position={[0, 0, 0.02]}>
+        <circleGeometry args={[0.3, 10]} />
+        <meshLambertMaterial color="#7ec8e8" flatShading />
       </mesh>
-      <mesh position={[0.15, 2.15, 0.1]} castShadow>
-        <sphereGeometry args={[0.72, 8, 6]} />
-        <meshLambertMaterial color="#3cb046" flatShading />
+      <mesh position={[0, -0.38, 0]}>
+        <boxGeometry args={[0.48, 0.36, 0.06]} />
+        <meshLambertMaterial color="#c4a056" flatShading />
+      </mesh>
+      <mesh position={[0, -0.38, 0.03]}>
+        <boxGeometry args={[0.32, 0.24, 0.04]} />
+        <meshLambertMaterial color="#5aa8c8" flatShading />
       </mesh>
     </group>
   );
 }
 
-function Window({ position, scale = 1 }: { position: [number, number, number]; scale?: number }) {
+function Sm64Tree({
+  position,
+  scale = 1,
+  leaves,
+}: {
+  position: [number, number, number];
+  scale?: number;
+  leaves: THREE.Texture;
+}) {
   return (
     <group position={position} scale={scale}>
-      <mesh>
-        <circleGeometry args={[0.38, 8]} />
-        <meshLambertMaterial color="#6b4a22" flatShading />
+      <mesh position={[0, 0.55, 0]}>
+        <cylinderGeometry args={[0.16, 0.26, 1.1, 6]} />
+        <meshLambertMaterial color="#7a4a22" flatShading />
       </mesh>
-      <mesh position={[0, 0, 0.02]}>
-        <circleGeometry args={[0.28, 8]} />
-        <meshLambertMaterial color="#8fd0e8" flatShading />
+      <mesh position={[0, 1.42, 0]} scale={[1.2, 0.72, 1.1]}>
+        <sphereGeometry args={[0.95, 8, 6]} />
+        <meshLambertMaterial map={leaves} color="#34a038" flatShading />
       </mesh>
-      <mesh position={[0, 0, 0.03]}>
-        <boxGeometry args={[0.04, 0.56, 0.02]} />
-        <meshLambertMaterial color="#d8c48a" flatShading />
+      <mesh position={[-0.38, 1.72, 0.18]} scale={[0.72, 0.48, 0.68]}>
+        <sphereGeometry args={[0.8, 8, 6]} />
+        <meshLambertMaterial map={leaves} color="#48b84c" flatShading />
       </mesh>
-      <mesh position={[0, 0, 0.03]}>
-        <boxGeometry args={[0.56, 0.04, 0.02]} />
-        <meshLambertMaterial color="#d8c48a" flatShading />
+      <mesh position={[0.34, 1.8, -0.12]} scale={[0.68, 0.46, 0.62]}>
+        <sphereGeometry args={[0.75, 8, 6]} />
+        <meshLambertMaterial map={leaves} color="#2e9432" flatShading />
       </mesh>
+    </group>
+  );
+}
+
+function Tower({
+  position,
+  radius,
+  height,
+  roofH,
+  brick,
+  roof,
+  flag,
+}: {
+  position: [number, number, number];
+  radius: number;
+  height: number;
+  roofH: number;
+  brick: THREE.Texture;
+  roof: THREE.Texture;
+  flag?: boolean;
+}) {
+  return (
+    <group position={position}>
+      <mesh position={[0, height / 2, 0]} castShadow={false}>
+        <cylinderGeometry args={[radius * 0.92, radius, height, 8]} />
+        <meshLambertMaterial map={brick} color="#efe8dc" flatShading />
+      </mesh>
+      <mesh position={[0, height + roofH / 2, 0]}>
+        <coneGeometry args={[radius * 1.28, roofH, 8]} />
+        <meshLambertMaterial map={roof} color="#d42020" flatShading />
+      </mesh>
+      {flag ? <Flag position={[0, height + roofH, 0]} /> : null}
     </group>
   );
 }
 
 export function World() {
-  const asset = (path: string) => `${import.meta.env.BASE_URL}${path.replace(/^\//, "")}`;
-  const [grass, stone, roof, sky, glass, pedestal] = useTexture([
-    asset("textures/grass.jpg"),
-    asset("textures/stone.jpg"),
-    asset("textures/roof.jpg"),
-    asset("textures/sky.jpg"),
-    asset("textures/glass.jpg"),
-    asset("textures/pedestal.jpg"),
-  ]);
+  const textures = useMemo(() => makeWorldTextures(), []);
 
-  useLayoutEffect(() => {
-    prep(grass, 22, 22);
-    prep(stone, 3, 2.4);
-    prep(roof, 2.4, 2.4);
-    prep(pedestal, 1.6, 1.6);
-    sky.colorSpace = THREE.SRGBColorSpace;
-    sky.magFilter = THREE.NearestFilter;
-    sky.minFilter = THREE.NearestFilter;
-    sky.generateMipmaps = false;
-    glass.colorSpace = THREE.SRGBColorSpace;
-    glass.magFilter = THREE.NearestFilter;
-    glass.minFilter = THREE.NearestFilter;
-    glass.generateMipmaps = false;
-  }, [grass, stone, roof, sky, glass, pedestal]);
+  useLayoutEffect(() => () => disposeWorldTextures(textures), [textures]);
 
-  const trees = useMemo(
-    () =>
-      [
-        [-11, 0, -10, 1.15],
-        [11.4, 0, -9.5, 1.05],
-        [-16, 0, -18, 1.35],
-        [15.5, 0, -17, 1.25],
-        [-8, 0, -26, 1.1],
-        [9, 0, -27, 1.2],
-        [-20, 0, -12, 0.95],
-        [19, 0, -13, 1],
-      ] as Array<[number, number, number, number]>,
-    [],
-  );
+  useFrame(() => {
+    const map = textures.water;
+    map.offset.x = gameTime.t * 0.04;
+    map.offset.y = gameTime.t * 0.02;
+  });
 
-  const fenceZ = -8.4;
+  const { grass, brick, roof, dirt, stone, water, leaves, glass } = textures;
 
   return (
     <group>
       <mesh scale={[-1, 1, 1]}>
-        <sphereGeometry args={[120, 16, 12]} />
-        <meshBasicMaterial map={sky} side={THREE.BackSide} depthWrite={false} />
+        <sphereGeometry args={[90, 16, 10]} />
+        <meshBasicMaterial color="#5eb8f0" side={THREE.BackSide} depthWrite={false} fog={false} />
+      </mesh>
+      <mesh position={[-24, 14, -42]} scale={[9, 3.2, 4.5]}>
+        <sphereGeometry args={[1, 8, 6]} />
+        <meshBasicMaterial color="#f4f8ff" depthWrite={false} fog={false} />
+      </mesh>
+      <mesh position={[18, 16, -46]} scale={[11, 3.8, 5]}>
+        <sphereGeometry args={[1, 8, 6]} />
+        <meshBasicMaterial color="#eef4ff" depthWrite={false} fog={false} />
+      </mesh>
+      <mesh position={[2, 18, -50]} scale={[7, 2.6, 3.5]}>
+        <sphereGeometry args={[1, 8, 6]} />
+        <meshBasicMaterial color="#f7fbff" depthWrite={false} fog={false} />
       </mesh>
 
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -6]} receiveShadow>
-        <circleGeometry args={[80, 32]} />
-        <meshLambertMaterial map={grass} color="#58b848" flatShading />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, -8]}>
+        <circleGeometry args={[70, 24]} />
+        <meshLambertMaterial map={grass} color="#48c040" flatShading />
       </mesh>
 
-      <mesh position={[0, 0.04, -14]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <ringGeometry args={[9.2, 13.4, 32]} />
-        <meshLambertMaterial color="#4a9fc4" transparent opacity={0.72} flatShading />
+      <mesh position={[-18, 1.2, -28]}>
+        <sphereGeometry args={[7, 8, 6]} />
+        <meshLambertMaterial map={grass} color="#3a9a38" flatShading />
+      </mesh>
+      <mesh position={[20, 1.4, -30]}>
+        <sphereGeometry args={[8, 8, 6]} />
+        <meshLambertMaterial map={grass} color="#3a9a38" flatShading />
+      </mesh>
+      <mesh position={[0, 0.8, -40]}>
+        <sphereGeometry args={[10, 8, 6]} />
+        <meshLambertMaterial map={grass} color="#348c34" flatShading />
       </mesh>
 
-      <mesh position={[0, 0.12, -7.2]} receiveShadow>
-        <boxGeometry args={[3.2, 0.16, 9.6]} />
-        <meshLambertMaterial color="#d6c27a" flatShading />
-      </mesh>
-      <mesh position={[0, 0.22, -3.6]} receiveShadow>
-        <boxGeometry args={[3.6, 0.18, 2.2]} />
-        <meshLambertMaterial map={stone} color="#d8d2c4" flatShading />
+      <mesh position={[0, 0.06, -16]} rotation={[-Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[8.4, 13.6, 24]} />
+        <meshLambertMaterial map={water} color="#4aa4d0" transparent opacity={0.82} flatShading />
       </mesh>
 
-      {Array.from({ length: 9 }, (_, i) => {
-        const x = -7.2 + i * 1.8;
-        return (
-          <group key={i} position={[x, 0, fenceZ]}>
-            <mesh position={[0, 0.38, 0]}>
-              <boxGeometry args={[0.1, 0.76, 0.1]} />
-              <meshLambertMaterial color="#8a5a28" flatShading />
-            </mesh>
-            <mesh position={[0.9, 0.52, 0]}>
-              <boxGeometry args={[1.8, 0.08, 0.06]} />
-              <meshLambertMaterial color="#6b4220" flatShading />
-            </mesh>
-          </group>
-        );
-      })}
+      <mesh position={[0, 0.05, -7]} rotation={[-Math.PI / 2, 0, 0]}>
+        <planeGeometry args={[2.1, 8]} />
+        <meshLambertMaterial map={dirt} color="#c9a060" flatShading />
+      </mesh>
+      <mesh position={[-1.35, 0.16, -7]}>
+        <boxGeometry args={[0.18, 0.24, 7.2]} />
+        <meshLambertMaterial map={stone} color="#c8b080" flatShading />
+      </mesh>
+      <mesh position={[1.35, 0.16, -7]}>
+        <boxGeometry args={[0.18, 0.24, 7.2]} />
+        <meshLambertMaterial map={stone} color="#c8b080" flatShading />
+      </mesh>
 
-      <group position={[0, 0, -15.5]} scale={1.22}>
-        <mesh position={[0, 3.6, 0]} castShadow receiveShadow>
-          <boxGeometry args={[14, 7.2, 10]} />
-          <meshLambertMaterial map={stone} color="#efe8dc" flatShading />
+      <group position={[0, -0.15, -15.4]} scale={1.08}>
+        <mesh position={[0, 3.5, 0]}>
+          <boxGeometry args={[8.4, 7.0, 8.6]} />
+          <meshLambertMaterial map={brick} color="#efe8dc" flatShading />
         </mesh>
-        <mesh position={[0, 7.35, 0]} castShadow>
-          <boxGeometry args={[15.2, 0.55, 11]} />
-          <meshLambertMaterial map={stone} color="#f4eee4" flatShading />
+        <mesh position={[0, 7.12, 0]}>
+          <boxGeometry args={[9.2, 0.4, 9.2]} />
+          <meshLambertMaterial map={brick} color="#f4eee4" flatShading />
         </mesh>
 
-        <mesh position={[0, 9.1, 1.2]} castShadow>
-          <boxGeometry args={[6.4, 3.4, 4.2]} />
-          <meshLambertMaterial map={stone} color="#efe8dc" flatShading />
+        <mesh position={[0, 1.7, 4.38]}>
+          <boxGeometry args={[2.2, 3.4, 0.28]} />
+          <meshLambertMaterial color="#3a2414" flatShading />
         </mesh>
-        <mesh position={[0, 11.7, 1.2]} rotation={[0, Math.PI / 4, 0]} castShadow>
-          <coneGeometry args={[4.6, 2.8, 4]} />
-          <meshLambertMaterial map={roof} color="#d42020" flatShading />
+        <mesh position={[-0.5, 1.7, 4.48]}>
+          <boxGeometry args={[0.95, 3.1, 0.08]} />
+          <meshLambertMaterial color="#2a1810" flatShading />
+        </mesh>
+        <mesh position={[0.5, 1.7, 4.48]}>
+          <boxGeometry args={[0.95, 3.1, 0.08]} />
+          <meshLambertMaterial color="#2a1810" flatShading />
         </mesh>
 
-        <mesh position={[0, 13.4, -0.6]} castShadow receiveShadow>
-          <cylinderGeometry args={[1.55, 1.7, 5.6, 8]} />
-          <meshLambertMaterial map={stone} color="#efe8dc" flatShading />
-        </mesh>
-        <mesh position={[0, 17.1, -0.6]} castShadow>
-          <coneGeometry args={[2.15, 3.2, 8]} />
-          <meshLambertMaterial map={roof} color="#d42020" flatShading />
-        </mesh>
-        <Flag position={[0, 18.4, -0.6]} />
-
-        <mesh position={[0, 6.55, 5.08]}>
-          <circleGeometry args={[1.35, 12]} />
+        <mesh position={[0, 5.6, 4.36]}>
+          <circleGeometry args={[1.35, 16]} />
           <meshBasicMaterial map={glass} toneMapped={false} />
         </mesh>
-        <mesh position={[0, 6.55, 5.05]}>
-          <ringGeometry args={[1.35, 1.55, 12]} />
+        <mesh position={[0, 5.6, 4.34]}>
+          <ringGeometry args={[1.35, 1.55, 16]} />
           <meshLambertMaterial color="#c4a056" flatShading />
         </mesh>
 
-        <mesh position={[0, 1.85, 5.15]} castShadow>
-          <boxGeometry args={[2.6, 3.7, 0.35]} />
-          <meshLambertMaterial color="#4a2c14" flatShading />
-        </mesh>
-        <mesh position={[0, 2.55, 5.22]}>
-          <boxGeometry args={[1.9, 2.1, 0.12]} />
-          <meshLambertMaterial color="#2a1810" flatShading />
-        </mesh>
-        <mesh position={[0, 1.85, 5.34]}>
-          <boxGeometry args={[0.12, 3.7, 0.08]} />
-          <meshLambertMaterial color="#d8c48a" flatShading />
-        </mesh>
+        <MushroomWindow position={[-2.35, 4.5, 4.36]} />
+        <MushroomWindow position={[2.35, 4.5, 4.36]} />
+        <MushroomWindow position={[-2.35, 2.55, 4.36]} scale={0.82} />
+        <MushroomWindow position={[2.35, 2.55, 4.36]} scale={0.82} />
 
-        <Window position={[-3.6, 4.6, 5.06]} />
-        <Window position={[3.6, 4.6, 5.06]} />
-        <Window position={[-3.6, 2.6, 5.06]} scale={0.85} />
-        <Window position={[3.6, 2.6, 5.06]} scale={0.85} />
+        <Tower position={[-5.55, 0, 3.9]} radius={1.5} height={6.4} roofH={2.7} brick={brick} roof={roof} flag />
+        <Tower position={[5.55, 0, 3.9]} radius={1.5} height={6.4} roofH={2.7} brick={brick} roof={roof} flag />
+        <Tower position={[-5.1, 0, -2.8]} radius={1.2} height={5.2} roofH={2.1} brick={brick} roof={roof} />
+        <Tower position={[5.1, 0, -2.8]} radius={1.2} height={5.2} roofH={2.1} brick={brick} roof={roof} />
 
-        <mesh position={[-8.2, 3.2, 2.4]} castShadow receiveShadow>
-          <cylinderGeometry args={[1.55, 1.65, 6.4, 8]} />
-          <meshLambertMaterial map={stone} color="#efe8dc" flatShading />
+        <mesh position={[0, 8.6, -0.4]}>
+          <cylinderGeometry args={[1.45, 1.6, 4.4, 8]} />
+          <meshLambertMaterial map={brick} color="#efe8dc" flatShading />
         </mesh>
-        <mesh position={[-8.2, 7.4, 2.4]} castShadow>
-          <coneGeometry args={[2.15, 2.9, 8]} />
+        <mesh position={[0, 11.5, -0.4]}>
+          <coneGeometry args={[2.05, 2.8, 8]} />
           <meshLambertMaterial map={roof} color="#d42020" flatShading />
         </mesh>
-        <Flag position={[-8.2, 8.6, 2.4]} />
+        <Flag position={[0, 12.7, -0.4]} />
 
-        <mesh position={[8.2, 3.2, 2.4]} castShadow receiveShadow>
-          <cylinderGeometry args={[1.55, 1.65, 6.4, 8]} />
-          <meshLambertMaterial map={stone} color="#efe8dc" flatShading />
-        </mesh>
-        <mesh position={[8.2, 7.4, 2.4]} castShadow>
-          <coneGeometry args={[2.15, 2.9, 8]} />
+        <mesh position={[-3.6, 8.0, 1.0]} rotation={[0, 0.35, 0]}>
+          <coneGeometry args={[2.2, 1.6, 4]} />
           <meshLambertMaterial map={roof} color="#d42020" flatShading />
         </mesh>
-        <Flag position={[8.2, 8.6, 2.4]} />
-
-        <mesh position={[-7.4, 2.8, -3.6]} castShadow receiveShadow>
-          <cylinderGeometry args={[1.35, 1.45, 5.6, 8]} />
-          <meshLambertMaterial map={stone} color="#efe8dc" flatShading />
-        </mesh>
-        <mesh position={[-7.4, 6.5, -3.6]} castShadow>
-          <coneGeometry args={[1.9, 2.5, 8]} />
-          <meshLambertMaterial map={roof} color="#d42020" flatShading />
-        </mesh>
-
-        <mesh position={[7.4, 2.8, -3.6]} castShadow receiveShadow>
-          <cylinderGeometry args={[1.35, 1.45, 5.6, 8]} />
-          <meshLambertMaterial map={stone} color="#efe8dc" flatShading />
-        </mesh>
-        <mesh position={[7.4, 6.5, -3.6]} castShadow>
-          <coneGeometry args={[1.9, 2.5, 8]} />
-          <meshLambertMaterial map={roof} color="#d42020" flatShading />
-        </mesh>
-
-        <mesh position={[-5.6, 8.4, 1.4]} rotation={[0, 0.4, 0]} castShadow>
-          <coneGeometry args={[3.4, 2.2, 4]} />
-          <meshLambertMaterial map={roof} color="#d42020" flatShading />
-        </mesh>
-        <mesh position={[5.6, 8.4, 1.4]} rotation={[0, -0.4, 0]} castShadow>
-          <coneGeometry args={[3.4, 2.2, 4]} />
+        <mesh position={[3.6, 8.0, 1.0]} rotation={[0, -0.35, 0]}>
+          <coneGeometry args={[2.2, 1.6, 4]} />
           <meshLambertMaterial map={roof} color="#d42020" flatShading />
         </mesh>
       </group>
 
-      {trees.map(([x, y, z, s], i) => (
-        <RoundTree key={i} position={[x, y, z]} scale={s} />
-      ))}
+      <Sm64Tree position={[-4.15, 0, -5.6]} scale={1.22} leaves={leaves} />
+      <Sm64Tree position={[4.45, 0, -5.3]} scale={1.12} leaves={leaves} />
+      <Sm64Tree position={[-7.4, 0, -9.5]} scale={1.35} leaves={leaves} />
+      <Sm64Tree position={[8.1, 0, -10]} scale={1.28} leaves={leaves} />
+      <Sm64Tree position={[-4.8, 0, -17]} scale={1.05} leaves={leaves} />
+      <Sm64Tree position={[5.6, 0, -18]} scale={1.1} leaves={leaves} />
 
-      <group position={[0, 0, 0.2]}>
-        <mesh position={[0, 0.42, 0]} castShadow receiveShadow>
-          <cylinderGeometry args={[0.62, 0.74, 0.84, 12]} />
-          <meshLambertMaterial map={pedestal} color="#b8b4ae" flatShading />
+      <group position={[0, 0, 0.15]}>
+        <mesh position={[0, 0.05, 0]}>
+          <cylinderGeometry args={[0.82, 0.9, 0.1, 20]} />
+          <meshLambertMaterial map={stone} color="#9a968f" />
         </mesh>
-        <mesh position={[0, 0.86, 0]} castShadow receiveShadow>
-          <cylinderGeometry args={[0.78, 0.64, 0.14, 12]} />
-          <meshLambertMaterial map={pedestal} color="#c4c0ba" flatShading />
+        <mesh position={[0, 0.22, 0]}>
+          <cylinderGeometry args={[0.42, 0.5, 0.28, 20]} />
+          <meshLambertMaterial map={stone} color="#a8a49e" />
         </mesh>
-        <mesh position={[0, 0.07, 0]} receiveShadow>
-          <cylinderGeometry args={[0.88, 0.96, 0.14, 12]} />
-          <meshLambertMaterial map={pedestal} color="#a8a49e" flatShading />
+        <mesh position={[0, 0.38, 0]}>
+          <cylinderGeometry args={[0.58, 0.48, 0.08, 20]} />
+          <meshLambertMaterial map={stone} color="#b8b4ae" />
         </mesh>
       </group>
     </group>

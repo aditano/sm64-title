@@ -34,7 +34,7 @@ export const Route = createRootRoute({
       { rel: "stylesheet", href: appCss },
       {
         rel: "stylesheet",
-        href: "https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;700;800&display=swap",
+        href: "https://fonts.googleapis.com/css2?family=Nunito:wght@600;700;800&display=swap",
       },
       { rel: "manifest", href: `${base}__grok/manifest.webmanifest` },
       { rel: "apple-touch-icon", href: `${base}__grok/icon-180.png` },

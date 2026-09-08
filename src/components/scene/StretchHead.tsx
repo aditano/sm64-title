@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { buildHead } from "@/lib/heads";
-import { useFaceStore } from "@/lib/face-store";
+import { buildMario, SKIN, type PinchJoint } from "@/lib/heads";
+import { useFaceStore, type PinchId } from "@/lib/face-store";
+import { gameTime } from "@/lib/game-clock";
+import { Sparkles } from "./Sparkles";
 
 const _ray = new THREE.Raycaster();
 const _ndc = new THREE.Vector2();
@@ -12,18 +14,20 @@ const _world = new THREE.Vector3();
 const _look = new THREE.Vector3();
 const _plane = new THREE.Plane();
 const _target = new THREE.Vector3();
+const _off = new THREE.Vector3();
 const _eyeOff = new THREE.Vector3();
 
-type Grab = {
-  rest: THREE.Vector3;
-  base: Float32Array;
-  radius: number;
-};
+type EyeBind = { group: THREE.Group; rest: THREE.Vector3; idx: number };
+type PartBind = { mesh: THREE.Mesh; rest: Float32Array };
 
-type EyeBind = {
-  group: THREE.Group;
-  rest: THREE.Vector3;
-  idx: number;
+const ZERO: Record<PinchId, THREE.Vector3> = {
+  cap: new THREE.Vector3(),
+  earL: new THREE.Vector3(),
+  earR: new THREE.Vector3(),
+  nose: new THREE.Vector3(),
+  stacheL: new THREE.Vector3(),
+  stacheR: new THREE.Vector3(),
+  mouth: new THREE.Vector3(),
 };
 
 function pointerNdc(e: PointerEvent, el: HTMLElement, out: THREE.Vector2) {
@@ -49,175 +53,252 @@ function closestVertex(rest: Float32Array, count: number, p: THREE.Vector3) {
   return best;
 }
 
-/** Original SM64 title screen only featured Mario's head. */
+function pickJoint(joints: PinchJoint[], p: THREE.Vector3) {
+  let best: PinchJoint | null = null;
+  let bestD = Infinity;
+  for (const j of joints) {
+    const dx = j.position[0] - p.x;
+    const dy = j.position[1] - p.y;
+    const dz = j.position[2] - p.z;
+    const d = dx * dx + dy * dy + dz * dz;
+    if (d < bestD) {
+      bestD = d;
+      best = j;
+    }
+  }
+  if (!best) return null;
+  const limit = Math.max(best.radius * 1.35, 0.55);
+  return bestD < limit * limit ? best : null;
+}
+
+function deform(rest: Float32Array, arr: Float32Array, joints: PinchJoint[], offsets: Record<PinchId, THREE.Vector3>) {
+  const count = rest.length / 3;
+  for (let i = 0; i < count; i++) {
+    const ix = i * 3;
+    const rx = rest[ix]!;
+    const ry = rest[ix + 1]!;
+    const rz = rest[ix + 2]!;
+    let dx = 0;
+    let dy = 0;
+    let dz = 0;
+    for (const j of joints) {
+      const jx = rx - j.position[0];
+      const jy = ry - j.position[1];
+      const jz = rz - j.position[2];
+      const dist = Math.sqrt(jx * jx + jy * jy + jz * jz);
+      if (dist >= j.radius) continue;
+      const t = 1 - dist / j.radius;
+      const w = t * t * (3 - 2 * t);
+      const o = offsets[j.id];
+      dx += o.x * w;
+      dy += o.y * w;
+      dz += o.z * w;
+    }
+    arr[ix] = rx + dx;
+    arr[ix + 1] = ry + dy;
+    arr[ix + 2] = rz + dz;
+  }
+}
+
 export function StretchHead() {
   const groupRef = useRef<THREE.Group>(null);
-  const meshRef = useRef<THREE.Mesh>(null);
-  const built = useMemo(() => buildHead("mario"), []);
-  const restRef = useRef<Float32Array>(new Float32Array(0));
-  const velRef = useRef<Float32Array>(new Float32Array(0));
-  const grabRef = useRef<Grab | null>(null);
+  const sparkRef = useRef<{ burst: (p: THREE.Vector3, n?: number, red?: boolean) => void }>(null);
+  const built = useMemo(() => buildMario(), []);
+  const bindsRef = useRef<PartBind[]>([]);
+  const offsets = useRef<Record<PinchId, THREE.Vector3>>({
+    cap: new THREE.Vector3(),
+    earL: new THREE.Vector3(),
+    earR: new THREE.Vector3(),
+    nose: new THREE.Vector3(),
+    stacheL: new THREE.Vector3(),
+    stacheR: new THREE.Vector3(),
+    mouth: new THREE.Vector3(),
+  });
+  const grabId = useRef<PinchId | null>(null);
   const eyeBinds = useRef<EyeBind[]>([]);
   const idle = useRef(0);
   const blink = useRef(0);
-  const nextBlink = useRef(2.4);
+  const nextBlink = useRef(2.2);
   const { camera, gl } = useThree();
   const resetToken = useFaceStore((s) => s.resetToken);
   const holdStretch = useFaceStore((s) => s.holdStretch);
-  useEffect(() => {
-    const mesh = meshRef.current;
-    if (!mesh) return;
-    const geo = built.geometry;
-    mesh.geometry = geo;
-    const pos = geo.getAttribute("position") as THREE.BufferAttribute;
-    restRef.current = new Float32Array(pos.array as Float32Array);
-    velRef.current = new Float32Array(pos.count * 3);
-    geo.computeBoundingSphere();
 
-    const binds: EyeBind[] = [];
-    const group = groupRef.current;
-    if (group) {
-      for (const child of [...group.children]) {
-        if (child.userData.eye) group.remove(child);
-      }
-      for (const spec of built.eyes) {
-        const eg = new THREE.Group();
-        eg.userData.eye = true;
-        eg.position.set(...spec.position);
-        const white = new THREE.Mesh(
-          new THREE.SphereGeometry(1, 10, 8),
-          new THREE.MeshLambertMaterial({ color: "#F7F4EE", flatShading: true }),
+  const materials = useMemo(() => {
+    const map = new Map<string, THREE.Material>();
+    for (const p of built.parts) {
+      const key = p.unlit ? `${p.color}:unlit` : p.map ? `${p.color}:map` : p.color;
+      if (map.has(key)) continue;
+      if (p.unlit) {
+        map.set(key, new THREE.MeshBasicMaterial({ color: p.color, map: p.map, fog: false }));
+      } else {
+        map.set(
+          key,
+          p.map
+            ? new THREE.MeshLambertMaterial({ color: p.color, map: p.map, flatShading: false })
+            : new THREE.MeshLambertMaterial({ color: p.color, flatShading: false }),
         );
-        white.scale.set(...spec.scale);
-        const iris = new THREE.Mesh(
-          new THREE.SphereGeometry(0.45, 8, 6),
-          new THREE.MeshLambertMaterial({ color: spec.iris, flatShading: true }),
-        );
-        iris.position.z = spec.scale[2] * 0.85;
-        iris.scale.setScalar(spec.scale[0] * (spec.pupil ?? 0.85));
-        const pupil = new THREE.Mesh(
-          new THREE.SphereGeometry(0.22, 6, 5),
-          new THREE.MeshLambertMaterial({ color: "#1A1410", flatShading: true }),
-        );
-        pupil.position.z = spec.scale[2] * 1.15;
-        pupil.scale.setScalar(spec.scale[0] * 0.55);
-        eg.add(white, iris, pupil);
-        group.add(eg);
-        const rest = new THREE.Vector3(...spec.position);
-        binds.push({
-          group: eg,
-          rest,
-          idx: closestVertex(restRef.current, pos.count, rest),
-        });
       }
     }
-    eyeBinds.current = binds;
+    return map;
+  }, [built]);
+
+  useLayoutEffect(() => {
+    const group = groupRef.current;
+    if (!group) return;
+    const binds: PartBind[] = [];
+    group.traverse((o) => {
+      if (o instanceof THREE.Mesh && o.userData.deform) {
+        const pos = o.geometry.getAttribute("position") as THREE.BufferAttribute;
+        binds.push({ mesh: o, rest: new Float32Array(pos.array as Float32Array) });
+      }
+    });
+    bindsRef.current = binds;
+
+    const rest0 = binds[0]?.rest;
+    const bindsEyes: EyeBind[] = [];
+    for (const child of [...group.children]) {
+      if (child.userData.eye) group.remove(child);
+    }
+    for (const spec of built.eyes) {
+      const eg = new THREE.Group();
+      eg.userData.eye = true;
+      eg.position.set(...spec.position);
+      const white = new THREE.Mesh(
+        new THREE.SphereGeometry(1, 12, 10),
+        new THREE.MeshLambertMaterial({ color: "#F7F4EE" }),
+      );
+      white.scale.set(...spec.scale);
+      const iris = new THREE.Mesh(
+        new THREE.SphereGeometry(0.48, 10, 8),
+        new THREE.MeshLambertMaterial({ color: spec.iris }),
+      );
+      iris.position.z = spec.scale[2] * 0.72;
+      iris.scale.setScalar(spec.scale[0] * 0.62);
+      const pupil = new THREE.Mesh(
+        new THREE.SphereGeometry(0.24, 8, 6),
+        new THREE.MeshLambertMaterial({ color: "#1A1410" }),
+      );
+      pupil.position.z = spec.scale[2] * 1.05;
+      pupil.scale.setScalar(spec.scale[0] * 0.32);
+      const lid = new THREE.Mesh(
+        new THREE.SphereGeometry(1.06, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.48),
+        new THREE.MeshLambertMaterial({ color: SKIN }),
+      );
+      lid.rotation.x = Math.PI;
+      lid.scale.set(spec.scale[0] * 1.18, spec.scale[1] * 0.04, spec.scale[2] * 1.12);
+      lid.position.y = spec.scale[1] * 0.58;
+      lid.visible = false;
+      lid.userData.lid = true;
+      lid.userData.lidSy = spec.scale[1] * 0.04;
+      eg.add(white, iris, pupil, lid);
+      group.add(eg);
+      const rest = new THREE.Vector3(...spec.position);
+      bindsEyes.push({
+        group: eg,
+        rest,
+        idx: rest0 ? closestVertex(rest0, rest0.length / 3, rest) : 0,
+      });
+    }
+    eyeBinds.current = bindsEyes;
 
     return () => {
-      geo.dispose();
-      for (const b of binds) {
+      for (const p of built.parts) {
+        p.geometry.dispose();
+        p.map?.dispose();
+      }
+      for (const m of materials.values()) m.dispose();
+      for (const b of bindsEyes) {
         b.group.traverse((o) => {
           if (o instanceof THREE.Mesh) {
             o.geometry.dispose();
-            const m = o.material;
-            if (Array.isArray(m)) m.forEach((x) => x.dispose());
-            else m.dispose();
+            const mat = o.material;
+            if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
+            else mat.dispose();
           }
         });
       }
     };
-  }, [built]);
+  }, [built, materials]);
 
   useEffect(() => {
-    const pos = meshRef.current?.geometry.getAttribute("position") as THREE.BufferAttribute | undefined;
-    const rest = restRef.current;
-    if (!pos || rest.length === 0) return;
-    (pos.array as Float32Array).set(rest);
-    pos.needsUpdate = true;
-    velRef.current.fill(0);
-    meshRef.current?.geometry.computeVertexNormals();
+    for (const id of Object.keys(offsets.current) as PinchId[]) {
+      offsets.current[id].set(0, 0, 0);
+    }
+    grabId.current = null;
+    useFaceStore.getState().setGrabbing(false);
+    useFaceStore.getState().setPinchId(null);
+    useFaceStore.getState().setTorn(false);
   }, [resetToken]);
 
   useEffect(() => {
     const el = gl.domElement;
     el.style.touchAction = "none";
+    el.style.cursor = "none";
 
     const onDown = (e: PointerEvent) => {
-      const mesh = meshRef.current;
-      if (!mesh) return;
+      const group = groupRef.current;
+      if (!group) return;
       pointerNdc(e, el, _ndc);
       _ray.setFromCamera(_ndc, camera);
-      const hits = _ray.intersectObject(mesh, false);
-      let hitPt: THREE.Vector3 | null = hits[0]?.point ?? null;
+      const meshes = bindsRef.current.map((b) => b.mesh);
+      const hits = _ray.intersectObjects(meshes, false);
+      let hitPt = hits[0]?.point ?? null;
       if (!hitPt) {
-        const sph = mesh.geometry.boundingSphere;
-        if (sph) {
-          const c = mesh.localToWorld(sph.center.clone());
-          const dist = _ray.ray.distanceToPoint(c);
-          const ws = mesh.getWorldScale(new THREE.Vector3()).x;
-          const reach = sph.radius * ws * 1.55;
-          if (dist < reach) hitPt = _ray.ray.closestPointToPoint(c, new THREE.Vector3());
+        group.getWorldPosition(_world);
+        const dist = _ray.ray.distanceToPoint(_world);
+        const reach = 1.45 * group.scale.x;
+        if (dist < reach) {
+          hitPt = _ray.ray.closestPointToPoint(_world, new THREE.Vector3());
         }
       }
       if (!hitPt) return;
+      group.worldToLocal(_local.copy(hitPt));
+      const joint = pickJoint(built.joints, _local);
+      if (!joint) return;
       e.preventDefault();
       el.setPointerCapture(e.pointerId);
-      mesh.worldToLocal(_local.copy(hitPt));
-      const pos = mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
-      grabRef.current = {
-        rest: _local.clone(),
-        base: new Float32Array(pos.array as Float32Array),
-        radius: 0.78,
-      };
+      grabId.current = joint.id;
+      useFaceStore.getState().setGrabbing(true);
+      useFaceStore.getState().setPinchId(joint.id);
+      sparkRef.current?.burst(_local, 6, false);
     };
 
     const onMove = (e: PointerEvent) => {
-      const grab = grabRef.current;
-      const mesh = meshRef.current;
-      if (!grab || !mesh) return;
+      const id = grabId.current;
+      const group = groupRef.current;
+      if (!id || !group) return;
+      const joint = built.joints.find((j) => j.id === id);
+      if (!joint) return;
       pointerNdc(e, el, _ndc);
       _ray.setFromCamera(_ndc, camera);
       camera.getWorldDirection(_look);
-      mesh.localToWorld(_world.copy(grab.rest));
+      group.localToWorld(_world.set(...joint.position));
       _plane.setFromNormalAndCoplanarPoint(_look, _world);
       if (!_ray.ray.intersectPlane(_plane, _hit)) return;
-      mesh.worldToLocal(_target.copy(_hit));
-      const pull = _target.clone().sub(grab.rest);
-      const max = 1.55;
-      if (pull.length() > max) pull.setLength(max);
-      const posArr = mesh.geometry.getAttribute("position").array as Float32Array;
-      const rest = grab.base;
-      const r2 = grab.radius * grab.radius;
-      const count = rest.length / 3;
-      for (let i = 0; i < count; i++) {
-        const ix = i * 3;
-        const dx = rest[ix]! - grab.rest.x;
-        const dy = rest[ix + 1]! - grab.rest.y;
-        const dz = rest[ix + 2]! - grab.rest.z;
-        const d2 = dx * dx + dy * dy + dz * dz;
-        let w = 0;
-        if (d2 < r2) {
-          const d = Math.sqrt(d2);
-          const t = 1 - d / grab.radius;
-          w = t * t * (3 - 2 * t);
-        }
-        posArr[ix] = rest[ix]! + pull.x * w;
-        posArr[ix + 1] = rest[ix + 1]! + pull.y * w;
-        posArr[ix + 2] = rest[ix + 2]! + pull.z * w;
+      group.worldToLocal(_target.copy(_hit));
+      _off.copy(_target).sub(_local.set(...joint.position));
+      const max = useFaceStore.getState().torn ? 2.4 : 1.55;
+      if (_off.length() > max) _off.setLength(max);
+      if (_off.length() > 1.7) {
+        useFaceStore.getState().setTorn(true);
+        sparkRef.current?.burst(_target, 10, true);
       }
-      const attr = mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
-      attr.needsUpdate = true;
-      mesh.geometry.computeVertexNormals();
+      offsets.current[id].copy(_off);
+      useFaceStore.getState().setGrabLocal([_target.x, _target.y, _target.z]);
     };
 
     const onUp = (e: PointerEvent) => {
-      if (!grabRef.current) return;
+      if (!grabId.current) return;
       try {
         el.releasePointerCapture(e.pointerId);
       } catch {
         /* already released */
       }
-      grabRef.current = null;
+      sparkRef.current?.burst(_local.set(...(built.joints.find((j) => j.id === grabId.current)?.position ?? [0, 0, 0])), 8, false);
+      grabId.current = null;
+      useFaceStore.getState().setGrabbing(false);
+      useFaceStore.getState().setPinchId(null);
+      useFaceStore.getState().setGrabLocal(null);
     };
 
     el.addEventListener("pointerdown", onDown);
@@ -225,23 +306,27 @@ export function StretchHead() {
     el.addEventListener("pointerup", onUp);
     el.addEventListener("pointercancel", onUp);
     return () => {
+      el.style.cursor = "";
       el.removeEventListener("pointerdown", onDown);
       el.removeEventListener("pointermove", onMove);
       el.removeEventListener("pointerup", onUp);
       el.removeEventListener("pointercancel", onUp);
     };
-  }, [camera, gl]);
+  }, [built.joints, camera, gl]);
 
-  useFrame((_, dt) => {
-    const d = Math.min(dt, 0.05);
+  useFrame(() => {
+    const d = gameTime.lastDt || 1 / 60;
     const group = groupRef.current;
-    const mesh = meshRef.current;
-    if (!group || !mesh) return;
+    if (!group) return;
+    const locked = holdStretch || !!grabId.current;
 
     idle.current += d;
-    if (!grabRef.current) {
-      group.rotation.y = Math.sin(idle.current * 0.55) * 0.12;
-      group.rotation.x = Math.sin(idle.current * 0.38) * 0.04;
+    if (!grabId.current) {
+      const yaw = Math.sin(idle.current * 0.42) * 0.16 + Math.sin(idle.current * 0.13) * 0.06;
+      const pitch = Math.sin(idle.current * 0.31) * 0.045;
+      group.rotation.y = yaw;
+      group.rotation.x = pitch;
+      useFaceStore.getState().setHeadRot([pitch, yaw, 0]);
     }
 
     blink.current += d;
@@ -250,53 +335,76 @@ export function StretchHead() {
     const eyeScaleY = blinkT < 1 && closing ? 1 - Math.sin(blinkT * Math.PI) * 0.88 : 1;
     if (closing && blinkT >= 1) {
       blink.current = 0;
-      nextBlink.current = 1.8 + Math.random() * 3.2;
+      nextBlink.current = 1.8 + (Math.sin(idle.current * 7.1) * 0.5 + 0.5) * 3.2;
     }
 
-    const pos = mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
-    const arr = pos.array as Float32Array;
-    const rest = restRef.current;
-    const vel = velRef.current;
-    const locked = holdStretch || !!grabRef.current;
-
-    if (!locked && rest.length === arr.length) {
-      const stiff = 18;
-      const damp = Math.exp(-10 * d);
-      let moving = false;
-      for (let i = 0; i < arr.length; i++) {
-        const force = (rest[i]! - arr[i]!) * stiff;
-        vel[i] = (vel[i]! + force * d) * damp;
-        arr[i] = arr[i]! + vel[i]! * d;
-        if (Math.abs(vel[i]!) > 0.0004 || Math.abs(rest[i]! - arr[i]!) > 0.0008) moving = true;
+    if (!locked) {
+      const stiff = useFaceStore.getState().torn ? 7 : 14;
+      for (const id of Object.keys(offsets.current) as PinchId[]) {
+        offsets.current[id].lerp(ZERO[id], 1 - Math.exp(-stiff * d));
       }
-      if (moving) {
-        pos.needsUpdate = true;
-        mesh.geometry.computeVertexNormals();
+    }
+
+    const snapshot: Record<PinchId, [number, number, number]> = {
+      cap: [0, 0, 0],
+      earL: [0, 0, 0],
+      earR: [0, 0, 0],
+      nose: [0, 0, 0],
+      stacheL: [0, 0, 0],
+      stacheR: [0, 0, 0],
+      mouth: [0, 0, 0],
+    };
+    for (const j of built.joints) {
+      const o = offsets.current[j.id];
+      snapshot[j.id] = [o.x, o.y, o.z];
+    }
+    useFaceStore.getState().setJointOffsets(snapshot);
+
+    let skinRest: Float32Array | null = null;
+    let skinArr: Float32Array | null = null;
+    for (const b of bindsRef.current) {
+      const pos = b.mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
+      const arr = pos.array as Float32Array;
+      deform(b.rest, arr, built.joints, offsets.current);
+      pos.needsUpdate = true;
+      b.mesh.geometry.computeVertexNormals();
+      if (!skinRest) {
+        skinRest = b.rest;
+        skinArr = arr;
       }
     }
 
     for (const b of eyeBinds.current) {
-      const ix = b.idx * 3;
-      _eyeOff.set(arr[ix]! - rest[ix]!, arr[ix + 1]! - rest[ix + 1]!, arr[ix + 2]! - rest[ix + 2]!);
-      b.group.position.copy(b.rest).add(_eyeOff);
+      if (skinRest && skinArr) {
+        const ix = b.idx * 3;
+        _eyeOff.set(skinArr[ix]! - skinRest[ix]!, skinArr[ix + 1]! - skinRest[ix + 1]!, skinArr[ix + 2]! - skinRest[ix + 2]!);
+        b.group.position.copy(b.rest).add(_eyeOff);
+      }
       b.group.scale.set(1, eyeScaleY, 1);
+      for (const child of b.group.children) {
+        if (child.userData.lid) {
+          child.visible = eyeScaleY < 0.94;
+          child.scale.y = (child.userData.lidSy as number) + (1 - eyeScaleY) * 0.22;
+        }
+      }
+    }
+
+    if (Math.sin(gameTime.t * 1.7) > 0.97) {
+      sparkRef.current?.burst(_local.set(0, 0.2, 0.7), 1, false);
     }
   });
 
-  const material = useMemo(
-    () =>
-      new THREE.MeshLambertMaterial({
-        vertexColors: true,
-        flatShading: true,
-      }),
-    [],
-  );
-
-  useEffect(() => () => material.dispose(), [material]);
-
   return (
-    <group ref={groupRef} position={[0, 1.86, 0.08]} scale={1.02}>
-      <mesh ref={meshRef} material={material} castShadow geometry={built.geometry} />
+    <group ref={groupRef} position={[0, 1.42, 0.08]} scale={1.02}>
+      {built.parts.map((p, i) => (
+        <mesh
+          key={i}
+          geometry={p.geometry}
+          material={materials.get(p.unlit ? `${p.color}:unlit` : p.map ? `${p.color}:map` : p.color) ?? undefined}
+          userData={{ deform: true }}
+        />
+      ))}
+      <Sparkles ref={sparkRef} />
     </group>
   );
 }
