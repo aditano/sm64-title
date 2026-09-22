@@ -233,7 +233,6 @@ export function StretchHead() {
   useEffect(() => {
     const el = gl.domElement;
     el.style.touchAction = "none";
-    el.style.cursor = "none";
 
     const onDown = (e: PointerEvent) => {
       const group = groupRef.current;
@@ -306,7 +305,6 @@ export function StretchHead() {
     el.addEventListener("pointerup", onUp);
     el.addEventListener("pointercancel", onUp);
     return () => {
-      el.style.cursor = "";
       el.removeEventListener("pointerdown", onDown);
       el.removeEventListener("pointermove", onMove);
       el.removeEventListener("pointerup", onUp);

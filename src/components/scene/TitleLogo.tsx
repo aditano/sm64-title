@@ -1,15 +1,15 @@
 import { useLayoutEffect, useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { logoAlpha } from "@/lib/game-clock";
+import { logoAlpha, N64_H, N64_W } from "@/lib/game-clock";
 
 const EXTRUDE: THREE.ExtrudeGeometryOptions = {
-  depth: 0.07,
+  depth: 0.14,
   bevelEnabled: true,
-  bevelThickness: 0.016,
-  bevelSize: 0.012,
+  bevelThickness: 0.03,
+  bevelSize: 0.02,
   bevelSegments: 1,
-  curveSegments: 4,
+  curveSegments: 5,
 };
 
 function letter(ch: string): THREE.Shape {
@@ -209,17 +209,78 @@ function letter(ch: string): THREE.Shape {
   }
 }
 
+function dropClosing(pts: THREE.Vector2[]) {
+  if (pts.length > 1 && pts[0]!.distanceTo(pts[pts.length - 1]!) < 1e-4) return pts.slice(0, -1);
+  return pts;
+}
+
+/** Pull polygon corners in so the extruded logo reads as the rounded SM64 lockup. */
+function roundLoop(pts: THREE.Vector2[], radius: number, path: THREE.Path) {
+  const n = pts.length;
+  if (n < 3) {
+    const first = pts[0] ?? new THREE.Vector2();
+    path.moveTo(first.x, first.y);
+    for (const p of pts.slice(1)) path.lineTo(p.x, p.y);
+    path.closePath();
+    return;
+  }
+  const corner = (i: number) => {
+    const prev = pts[(i - 1 + n) % n]!;
+    const cur = pts[i]!;
+    const next = pts[(i + 1) % n]!;
+    const v1x = cur.x - prev.x;
+    const v1y = cur.y - prev.y;
+    const v2x = next.x - cur.x;
+    const v2y = next.y - cur.y;
+    const l1 = Math.hypot(v1x, v1y) || 1;
+    const l2 = Math.hypot(v2x, v2y) || 1;
+    const r = Math.min(radius, l1 * 0.46, l2 * 0.46);
+    return {
+      ax: cur.x - (v1x / l1) * r,
+      ay: cur.y - (v1y / l1) * r,
+      bx: cur.x + (v2x / l2) * r,
+      by: cur.y + (v2y / l2) * r,
+      cx: cur.x,
+      cy: cur.y,
+    };
+  };
+  const first = corner(0);
+  path.moveTo(first.ax, first.ay);
+  path.quadraticCurveTo(first.cx, first.cy, first.bx, first.by);
+  for (let i = 1; i < n; i++) {
+    const c = corner(i);
+    path.lineTo(c.ax, c.ay);
+    path.quadraticCurveTo(c.cx, c.cy, c.bx, c.by);
+  }
+  path.closePath();
+}
+
+function soften(shape: THREE.Shape, radius: number) {
+  const extracted = shape.extractPoints(4);
+  const next = new THREE.Shape();
+  roundLoop(dropClosing(extracted.shape), radius, next);
+  for (const hole of extracted.holes) {
+    const h = new THREE.Path();
+    roundLoop(dropClosing(hole), radius * 0.7, h);
+    next.holes.push(h);
+  }
+  return next;
+}
+
 function makeLetterGeo(ch: string) {
-  const geo = new THREE.ExtrudeGeometry(letter(ch), EXTRUDE);
+  const geo = new THREE.ExtrudeGeometry(soften(letter(ch), ch === "O" || ch === "6" ? 0.04 : 0.08), EXTRUDE);
   geo.center();
   geo.computeVertexNormals();
   return geo;
 }
 
-const RED = "#E31B1B";
-const RED_SHADE = "#9A180C";
-const GOLD = "#F0C43A";
-const GOLD_SHADE = "#A07018";
+const RED = "#E10612";
+const RED_SHADE = "#8C100C";
+const GOLD = "#FFD000";
+const GOLD_SHADE = "#C47A00";
+
+/** Far enough to sit behind Mario at every zoom, close enough to cover the castle. */
+const LOGO_Z = 6.2;
 
 function skipRaycast() {}
 
@@ -227,15 +288,18 @@ function Word({
   text,
   x,
   y,
-  size,
+  w,
+  h,
   tracking,
   color,
   shade,
 }: {
   text: string;
+  /** Center of the first letter, in 320×240 screen pixels (origin top-left). */
   x: number;
   y: number;
-  size: number;
+  w: number;
+  h: number;
   tracking: number;
   color: string;
   shade: string;
@@ -252,14 +316,14 @@ function Word({
     <group>
       {geos.map((geo, i) => {
         const px = cx;
-        cx += size * tracking;
+        cx += tracking;
         return (
-          <group key={i} position={[px, y, 0]} scale={[size, size, size]}>
-            <mesh geometry={geo} position={[0.08, -0.1, 0.04]} renderOrder={18} raycast={skipRaycast}>
-              <meshBasicMaterial color={shade} fog={false} depthTest={false} depthWrite={false} />
+          <group key={i} position={[px - N64_W / 2, N64_H / 2 - y, 0]} scale={[w, h, 22]}>
+            <mesh geometry={geo} position={[0.05, -0.08, -0.06]} renderOrder={4} raycast={skipRaycast}>
+              <meshBasicMaterial color={shade} fog={false} />
             </mesh>
-            <mesh geometry={geo} renderOrder={19} raycast={skipRaycast}>
-              <meshBasicMaterial color={color} fog={false} depthTest={false} depthWrite={false} />
+            <mesh geometry={geo} renderOrder={5} raycast={skipRaycast}>
+              <meshBasicMaterial color={color} fog={false} />
             </mesh>
           </group>
         );
@@ -289,41 +353,48 @@ function TmMark() {
   }, []);
   useLayoutEffect(() => () => map.dispose(), [map]);
   return (
-    <mesh position={[0.46, 0.155, 0]} renderOrder={20} raycast={skipRaycast}>
-      <planeGeometry args={[0.11, 0.055]} />
-      <meshBasicMaterial map={map} transparent depthTest={false} depthWrite={false} fog={false} />
+    <mesh position={[286 - N64_W / 2, N64_H / 2 - 28, 1]} renderOrder={6} raycast={skipRaycast}>
+      <planeGeometry args={[18, 9]} />
+      <meshBasicMaterial map={map} transparent fog={false} />
     </mesh>
   );
 }
 
 export function TitleLogo() {
   const ref = useRef<THREE.Group>(null);
+  const screenRef = useRef<THREE.Group>(null);
   const { camera } = useThree();
   useFrame(() => {
     const g = ref.current;
-    if (!g) return;
+    const screen = screenRef.current;
+    if (!g || !screen) return;
     const a = logoAlpha();
     g.visible = a > 0.02;
     g.position.copy(camera.position);
     g.quaternion.copy(camera.quaternion);
+    const cam = camera as THREE.PerspectiveCamera;
+    const halfH = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * LOGO_Z;
+    const halfW = halfH * cam.aspect;
+    screen.position.set(0, 0, -LOGO_Z);
+    screen.scale.set(halfW / (N64_W / 2), halfH / (N64_H / 2), halfH / (N64_H / 2));
     g.traverse((o) => {
       if (!(o instanceof THREE.Mesh)) return;
       const m = o.material;
       if (!Array.isArray(m) && "opacity" in m) {
         m.transparent = a < 0.999;
         m.opacity = a;
-        m.depthTest = false;
-        m.depthWrite = false;
+        m.depthTest = true;
+        m.depthWrite = true;
       }
     });
   });
 
   return (
     <group ref={ref} visible={false}>
-      <group position={[-0.34, 0.3, -1.02]}>
-        <Word text="SUPER" x={0.02} y={0.128} size={0.052} tracking={0.84} color={RED} shade={RED_SHADE} />
-        <Word text="MARIO" x={0} y={0} size={0.108} tracking={0.9} color={RED} shade={RED_SHADE} />
-        <Word text="64" x={0.58} y={0} size={0.108} tracking={0.92} color={GOLD} shade={GOLD_SHADE} />
+      <group ref={screenRef}>
+        <Word text="SUPER" x={87} y={24} w={15} h={15} tracking={16} color={RED} shade={RED_SHADE} />
+        <Word text="MARIO" x={44} y={52} w={32} h={40} tracking={30} color={RED} shade={RED_SHADE} />
+        <Word text="64" x={235} y={53} w={34} h={38} tracking={32} color={GOLD} shade={GOLD_SHADE} />
         <TmMark />
       </group>
     </group>
