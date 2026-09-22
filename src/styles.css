@@ -60,3 +60,10 @@
   image-rendering: pixelated !important;
   image-rendering: crisp-edges !important;
 }
+
+@media (hover: hover) and (pointer: fine) {
+  .n64-frame,
+  .n64-frame * {
+    cursor: none;
+  }
+}

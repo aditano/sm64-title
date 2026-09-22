@@ -64,9 +64,12 @@ const HUD: Record<string, string[]> = {
   ],
 };
 
+/** SM64 `print_text` advances 12px and draws a 16×16 glyph. */
+const GLYPH_ADVANCE = 12;
+
 function drawGlyph(ctx: CanvasRenderingContext2D, ch: string, x: number, y: number) {
   const rows = HUD[ch];
-  if (!rows) return 0;
+  if (!rows) return;
   const px = 2;
   const w = rows[0]!.length;
   const h = rows.length;
@@ -74,14 +77,14 @@ function drawGlyph(ctx: CanvasRenderingContext2D, ch: string, x: number, y: numb
   for (let j = 0; j < h; j++) {
     for (let i = 0; i < w; i++) {
       if (rows[j]![i] !== "1") continue;
-      ctx.fillRect(x + i * px + 3, y + j * px + 3, px, px);
+      ctx.fillRect(x + i * px + 1, y + j * px + 1, px, px);
     }
   }
   ctx.fillStyle = "#c41810";
   for (let j = 0; j < h; j++) {
     for (let i = 0; i < w; i++) {
       if (rows[j]![i] !== "1") continue;
-      ctx.fillRect(x + i * px - 2, y + j * px - 2, px + 4, px + 4);
+      ctx.fillRect(x + i * px - 1, y + j * px - 1, px + 2, px + 2);
     }
   }
   ctx.fillStyle = "#ffe14a";
@@ -98,14 +101,16 @@ function drawGlyph(ctx: CanvasRenderingContext2D, ch: string, x: number, y: numb
       ctx.fillRect(x + i * px, y + j * px, px, 1);
     }
   }
-  return w * px + 4;
 }
 
-function drawHudWord(ctx: CanvasRenderingContext2D, word: string, x: number, cy: number) {
-  const h = 16;
-  let cx = x;
-  const y = Math.round(N64_H - cy - h);
-  for (const ch of word) cx += drawGlyph(ctx, ch, cx, y);
+/** `centerX` / `textY` match `print_text_centered` (y grows up from the bottom). */
+function drawHudWord(ctx: CanvasRenderingContext2D, word: string, centerX: number, textY: number) {
+  let cx = Math.round(centerX - (word.length * GLYPH_ADVANCE) / 2);
+  const y = 224 - textY;
+  for (const ch of word) {
+    drawGlyph(ctx, ch, cx, y);
+    cx += GLYPH_ADVANCE;
+  }
 }
 
 const TINY: Record<string, string[]> = {
@@ -156,63 +161,102 @@ function drawCopyright(ctx: CanvasRenderingContext2D) {
   }
 }
 
-const GLOVE_OPEN = [
-  "....1111........",
-  "...111111.......",
-  "..11.11111......",
-  ".11...11111.....",
-  "111...111111....",
-  "11....1111111...",
-  "11....1111111...",
-  "111...11111111..",
-  ".111.1111111111.",
-  "..1111111111111.",
-  "...11111111111..",
-  "....111111111...",
-  ".....1111111....",
-  "......11111.....",
-];
+const GLOVE_SIZE = 32;
+/** Fingertip / knuckle — the pixel that tracks the pointer. */
+const OPEN_HOT: [number, number] = [9, 2];
+const FIST_HOT: [number, number] = [9, 5];
 
-const GLOVE_PINCH = [
-  "................",
-  "......1111......",
-  ".....111111.....",
-  "....11111111....",
-  "...111111111....",
-  "..11111111111...",
-  ".111111111111...",
-  "1111111111111...",
-  ".111111111111...",
-  "..11111111111...",
-  "...111111111....",
-  "....1111111.....",
-  ".....11111......",
-  "......111.......",
-];
+function roundFinger(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, 2);
+  ctx.fill();
+}
 
-function drawGloveBitmap(ctx: CanvasRenderingContext2D, x: number, y: number, rows: string[]) {
-  const ox = Math.round(x) - 8;
-  const oy = Math.round(y) - 8;
-  for (let j = 0; j < rows.length; j++) {
-    for (let i = 0; i < rows[j]!.length; i++) {
-      if (rows[j]![i] !== "1") continue;
-      ctx.fillStyle = "#3a2418";
-      ctx.fillRect(ox + i - 1, oy + j, 3, 3);
+function paintGlove(closed: boolean) {
+  const c = document.createElement("canvas");
+  c.width = GLOVE_SIZE;
+  c.height = GLOVE_SIZE;
+  const g = c.getContext("2d");
+  if (!g) return c;
+  g.fillStyle = "#ffffff";
+  if (!closed) {
+    roundFinger(g, 1, 9, 4, 11);
+    roundFinger(g, 8, 2, 5, 15);
+    roundFinger(g, 16, 8, 4, 11);
+    roundFinger(g, 23, 11, 4, 8);
+    g.beginPath();
+    g.ellipse(15, 23, 11, 7, 0, 0, Math.PI * 2);
+    g.fill();
+    g.beginPath();
+    g.roundRect(7, 24, 16, 7, 2);
+    g.fill();
+    g.beginPath();
+    g.ellipse(4, 20, 4.5, 4.5, 0, 0, Math.PI * 2);
+    g.fill();
+  } else {
+    g.beginPath();
+    g.ellipse(16, 19, 10, 9, 0, 0, Math.PI * 2);
+    g.fill();
+    g.beginPath();
+    g.ellipse(6, 19, 5, 5, 0, 0, Math.PI * 2);
+    g.fill();
+    g.beginPath();
+    g.roundRect(9, 22, 14, 8, 2);
+    g.fill();
+    g.beginPath();
+    g.ellipse(10, 8, 3.2, 3.2, 0, 0, Math.PI * 2);
+    g.fill();
+  }
+  const img = g.getImageData(0, 0, GLOVE_SIZE, GLOVE_SIZE);
+  const src = new Uint8ClampedArray(img.data);
+  const out = img.data;
+  for (let y = 0; y < GLOVE_SIZE; y++) {
+    for (let x = 0; x < GLOVE_SIZE; x++) {
+      const i = (y * GLOVE_SIZE + x) * 4;
+      if (src[i + 3]! > 128) {
+        const cuff = y > 23;
+        out[i] = cuff ? 214 : 247;
+        out[i + 1] = cuff ? 208 : 243;
+        out[i + 2] = cuff ? 196 : 234;
+        out[i + 3] = 255;
+        continue;
+      }
+      let edge = false;
+      for (let dy = -1; dy <= 1 && !edge; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= GLOVE_SIZE || ny >= GLOVE_SIZE) continue;
+          if (src[(ny * GLOVE_SIZE + nx) * 4 + 3]! > 128) edge = true;
+        }
+      }
+      if (edge) {
+        out[i] = 42;
+        out[i + 1] = 24;
+        out[i + 2] = 16;
+        out[i + 3] = 255;
+      }
     }
   }
-  for (let j = 0; j < rows.length; j++) {
-    for (let i = 0; i < rows[j]!.length; i++) {
-      if (rows[j]![i] !== "1") continue;
-      ctx.fillStyle = "#c8c0b0";
-      ctx.fillRect(ox + i, oy + j + 1, 1, 1);
-      ctx.fillStyle = "#f6f1e6";
-      ctx.fillRect(ox + i, oy + j, 1, 1);
-    }
+  g.putImageData(img, 0, 0);
+  return c;
+}
+
+let openSprite: HTMLCanvasElement | null = null;
+let fistSprite: HTMLCanvasElement | null = null;
+
+function gloveSprite(closed: boolean) {
+  if (closed) {
+    fistSprite ??= paintGlove(true);
+    return fistSprite;
   }
+  openSprite ??= paintGlove(false);
+  return openSprite;
 }
 
 export function drawGlove(ctx: CanvasRenderingContext2D, x: number, y: number, grabbing: boolean) {
-  drawGloveBitmap(ctx, x, y, grabbing ? GLOVE_PINCH : GLOVE_OPEN);
+  const hot = grabbing ? FIST_HOT : OPEN_HOT;
+  ctx.drawImage(gloveSprite(grabbing), Math.round(x) - hot[0], Math.round(y) - hot[1]);
 }
 
 export function drawTitleHud(

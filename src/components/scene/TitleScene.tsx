@@ -10,9 +10,9 @@ import { gameTime } from "@/lib/game-clock";
 const SKY_CLEAR = "#62b4e8";
 
 const ZOOM: Record<0 | 1 | 2, { pos: [number, number, number]; look: [number, number, number] }> = {
-  0: { pos: [0, 1.16, 5.15], look: [0, 1.5, 0] },
-  1: { pos: [0, 1.28, 3.7], look: [0, 1.52, 0] },
-  2: { pos: [0, 1.38, 2.7], look: [0, 1.54, 0] },
+  0: { pos: [0, 1.28, 5.35], look: [0, 1.7, 0] },
+  1: { pos: [0, 1.34, 3.75], look: [0, 1.66, 0] },
+  2: { pos: [0, 1.44, 2.75], look: [0, 1.72, 0] },
 };
 
 function ClockDriver() {
@@ -65,7 +65,7 @@ export function TitleScene({ dpr }: { dpr: number }) {
   return (
     <Canvas
       className="h-full w-full touch-none"
-      camera={{ position: [0, 1.16, 5.15], fov: 45, near: 0.1, far: 160 }}
+      camera={{ position: [0, 1.28, 5.35], fov: 45, near: 0.1, far: 160 }}
       dpr={dpr}
       gl={{
         antialias: false,

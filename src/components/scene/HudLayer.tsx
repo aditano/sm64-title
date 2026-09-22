@@ -32,17 +32,30 @@ export function HudLayer() {
 
   useEffect(() => {
     if (isCoarse()) return;
-    const onMove = (e: PointerEvent) => {
+    const place = (e: PointerEvent) => {
       const frame = document.querySelector("[data-n64-frame]");
       if (!(frame instanceof HTMLElement)) return;
       const r = frame.getBoundingClientRect();
-      if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) return;
+      const inside = e.clientX >= r.left && e.clientX < r.right && e.clientY >= r.top && e.clientY < r.bottom;
+      if (!inside) {
+        useFaceStore.getState().setGlove(false);
+        return;
+      }
       const x = ((e.clientX - r.left) / r.width) * N64_W;
       const y = ((e.clientY - r.top) / r.height) * N64_H;
       useFaceStore.getState().setGlove(true, x, y);
     };
-    window.addEventListener("pointermove", onMove);
-    return () => window.removeEventListener("pointermove", onMove);
+    const hide = () => useFaceStore.getState().setGlove(false);
+    window.addEventListener("pointermove", place);
+    window.addEventListener("pointerdown", place);
+    window.addEventListener("blur", hide);
+    document.documentElement.addEventListener("mouseleave", hide);
+    return () => {
+      window.removeEventListener("pointermove", place);
+      window.removeEventListener("pointerdown", place);
+      window.removeEventListener("blur", hide);
+      document.documentElement.removeEventListener("mouseleave", hide);
+    };
   }, []);
 
   return (

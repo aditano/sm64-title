@@ -183,7 +183,7 @@ export function World() {
         <meshLambertMaterial map={stone} color="#c8b080" flatShading />
       </mesh>
 
-      <group position={[0, -0.15, -15.4]} scale={1.08}>
+      <group position={[0, -0.2, -16.2]} scale={0.86}>
         <mesh position={[0, 3.5, 0]}>
           <boxGeometry args={[8.4, 7.0, 8.6]} />
           <meshLambertMaterial map={brick} color="#efe8dc" flatShading />
