@@ -5,7 +5,7 @@ import { gameTime, logoAlpha, pressStartVisible } from "@/lib/game-clock";
 function snapshot() {
   const s = useFaceStore.getState();
   return JSON.stringify({
-    coords: "World: +x right, +y up, +z toward camera. HUD text is 320x240 with y up from the bottom. Glove x/y are 320x240 with y down from the top.",
+    coords: "World: +x right, +y up, +z toward camera. HUD text is 320x240 with y up from the bottom. Glove x/y are pixels on that board, y down from the top. A taller frame keeps the board centered.",
     mode: "title",
     t: Number(gameTime.t.toFixed(3)),
     frame30: gameTime.frame30,

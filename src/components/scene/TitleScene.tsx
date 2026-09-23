@@ -5,9 +5,18 @@ import { StretchHead } from "./StretchHead";
 import { World } from "./World";
 import { TitleLogo } from "./TitleLogo";
 import { useFaceStore } from "@/lib/face-store";
-import { gameTime } from "@/lib/game-clock";
+import { gameTime, N64_H, N64_W } from "@/lib/game-clock";
 
 const SKY_CLEAR = "#62b4e8";
+const DESIGN_VFOV = 45;
+const DESIGN_ASPECT = N64_W / N64_H;
+
+/** Match the title's horizontal field of view when the frame is taller than 4:3. */
+function verticalFovForAspect(aspect: number) {
+  if (!(aspect > 0) || aspect >= DESIGN_ASPECT - 1e-3) return DESIGN_VFOV;
+  const tanHalfWidth = Math.tan(THREE.MathUtils.degToRad(DESIGN_VFOV / 2)) * DESIGN_ASPECT;
+  return THREE.MathUtils.radToDeg(2 * Math.atan(tanHalfWidth / aspect));
+}
 
 const ZOOM: Record<0 | 1 | 2, { pos: [number, number, number]; look: [number, number, number] }> = {
   0: { pos: [0, 1.28, 5.35], look: [0, 1.7, 0] },
@@ -42,12 +51,19 @@ function CameraRig() {
     const cam = camera as THREE.PerspectiveCamera;
     const z = ZOOM[zoom];
     cam.position.set(...z.pos);
-    cam.fov = 45;
     cam.near = 0.1;
     cam.far = 160;
     cam.lookAt(...z.look);
     cam.updateProjectionMatrix();
   }, [camera, zoom]);
+  useFrame(() => {
+    const cam = camera as THREE.PerspectiveCamera;
+    const fov = verticalFovForAspect(cam.aspect);
+    if (Math.abs(cam.fov - fov) > 0.01) {
+      cam.fov = fov;
+      cam.updateProjectionMatrix();
+    }
+  }, -50);
   return null;
 }
 

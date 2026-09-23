@@ -254,18 +254,104 @@ function gloveSprite(closed: boolean) {
   return openSprite;
 }
 
-export function drawGlove(ctx: CanvasRenderingContext2D, x: number, y: number, grabbing: boolean) {
+export function drawGlove(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  grabbing: boolean,
+  scale = 1,
+) {
   const hot = grabbing ? FIST_HOT : OPEN_HOT;
-  ctx.drawImage(gloveSprite(grabbing), Math.round(x) - hot[0], Math.round(y) - hot[1]);
+  const size = GLOVE_SIZE * scale;
+  ctx.drawImage(
+    gloveSprite(grabbing),
+    Math.round(x - hot[0] * scale),
+    Math.round(y - hot[1] * scale),
+    size,
+    size,
+  );
+}
+
+/** Bitmap for the HUD overlay. A 4:3 frame stays 320×240; a taller frame extends it. */
+export function hudBitmapSize(cssWidth: number, cssHeight: number) {
+  const w = N64_W;
+  const h = Math.max(N64_H, Math.round((N64_W * cssHeight) / Math.max(cssWidth, 1)));
+  const boardY = Math.round((h - N64_H) / 2);
+  return { w, h, boardY };
+}
+
+const HINT_FROM = { x: 168, y: 132 };
+const HINT_TO = { x: 214, y: 96 };
+
+/** Idle drag on the nose so a touch screen shows the grab without a hover cursor. */
+export function gloveHintPose(t: number, reduceMotion: boolean) {
+  if (reduceMotion) return { x: HINT_FROM.x, y: HINT_FROM.y, grabbing: false };
+  const u = (t % 2.2) / 2.2;
+  let k = 0;
+  let grabbing = false;
+  if (u >= 0.18 && u < 0.55) {
+    k = (u - 0.18) / 0.37;
+    grabbing = true;
+  } else if (u >= 0.55 && u < 0.78) {
+    k = 1 - (u - 0.55) / 0.23;
+    grabbing = k > 0.15;
+  }
+  const ease = k * k * (3 - 2 * k);
+  return {
+    x: HINT_FROM.x + (HINT_TO.x - HINT_FROM.x) * ease,
+    y: HINT_FROM.y + (HINT_TO.y - HINT_FROM.y) * ease,
+    grabbing,
+  };
+}
+
+function drawHintTrack(ctx: CanvasRenderingContext2D) {
+  const x0 = HINT_FROM.x;
+  const y0 = HINT_FROM.y;
+  const x1 = HINT_TO.x;
+  const y1 = HINT_TO.y;
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.strokeStyle = "#2a1810";
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  ctx.moveTo(x0, y0);
+  ctx.lineTo(x1, y1);
+  ctx.stroke();
+  ctx.strokeStyle = "#fff4d2";
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  const ang = Math.atan2(y1 - y0, x1 - x0);
+  ctx.translate(x1, y1);
+  ctx.rotate(ang);
+  ctx.fillStyle = "#2a1810";
+  ctx.beginPath();
+  ctx.moveTo(9, 0);
+  ctx.lineTo(-3, -6);
+  ctx.lineTo(-3, 6);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#fff4d2";
+  ctx.beginPath();
+  ctx.moveTo(6, 0);
+  ctx.lineTo(-1, -3);
+  ctx.lineTo(-1, 3);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
 }
 
 export function drawTitleHud(
   ctx: CanvasRenderingContext2D,
   frame30: number,
-  _t: number,
+  t: number,
   glove?: { on: boolean; x: number; y: number; grabbing: boolean },
+  opts?: { boardY?: number; touchHint?: boolean; reduceMotion?: boolean },
 ) {
-  ctx.clearRect(0, 0, N64_W, N64_H);
+  const boardY = opts?.boardY ?? 0;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  ctx.imageSmoothingEnabled = false;
+  ctx.translate(0, boardY);
 
   if (pressStartVisible(frame30)) {
     drawHudWord(ctx, "PRESS", 60, 38);
@@ -274,5 +360,17 @@ export function drawTitleHud(
 
   drawCopyright(ctx);
 
-  if (glove?.on) drawGlove(ctx, glove.x, glove.y, glove.grabbing);
+  if (glove?.on) {
+    drawGlove(ctx, glove.x, glove.y, glove.grabbing);
+    return;
+  }
+
+  if (!opts?.touchHint) return;
+  drawHintTrack(ctx);
+  const pose = gloveHintPose(t, opts.reduceMotion ?? false);
+  ctx.save();
+  ctx.globalAlpha = 0.4;
+  drawGlove(ctx, HINT_TO.x, HINT_TO.y, true, 1.35);
+  ctx.restore();
+  drawGlove(ctx, pose.x, pose.y, pose.grabbing, 1.75);
 }

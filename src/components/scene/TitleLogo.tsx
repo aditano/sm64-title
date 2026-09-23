@@ -373,10 +373,10 @@ export function TitleLogo() {
     g.position.copy(camera.position);
     g.quaternion.copy(camera.quaternion);
     const cam = camera as THREE.PerspectiveCamera;
-    const halfH = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * LOGO_Z;
-    const halfW = halfH * cam.aspect;
+    const halfW = Math.tan(THREE.MathUtils.degToRad(cam.fov / 2)) * LOGO_Z * cam.aspect;
+    const s = halfW / (N64_W / 2);
     screen.position.set(0, 0, -LOGO_Z);
-    screen.scale.set(halfW / (N64_W / 2), halfH / (N64_H / 2), halfH / (N64_H / 2));
+    screen.scale.set(s, s, s);
     g.traverse((o) => {
       if (!(o instanceof THREE.Mesh)) return;
       const m = o.material;
