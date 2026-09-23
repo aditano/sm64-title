@@ -63,7 +63,7 @@ export function HudLayer() {
       ref={ref}
       width={N64_W}
       height={N64_H}
-      className="pointer-events-none absolute inset-0 z-10 h-full w-full"
+      className="n64-hud"
       style={{ imageRendering: "pixelated" }}
       aria-hidden
     />
