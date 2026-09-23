@@ -45,6 +45,7 @@
   display: grid;
   place-items: center;
   container-type: size;
+  container-name: n64;
 }
 
 .n64-frame {
@@ -52,8 +53,18 @@
   width: min(100cqw, calc(100cqh * 4 / 3));
   height: min(100cqh, calc(100cqw * 3 / 4));
   overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
+}
+
+/* Portrait is taller than 4:3, so a contained frame is a short band.
+   Fill the stage and let the camera show more courtyard above and below. */
+@container n64 (max-aspect-ratio: 4/3) {
+  .n64-frame {
+    width: 100cqw;
+    height: 100cqh;
+  }
 }
 
 .n64-frame canvas {
