@@ -1,3 +1,4 @@
+import { gloveMask, glovePose, GLOVE_SIZE } from "./face-deform.mjs";
 import { N64_H, N64_W, pressStartVisible } from "./game-clock";
 
 /** Chunky SM64-like HUD glyphs — ~12px, yellow fill, thick red outline. */
@@ -161,82 +162,32 @@ function drawCopyright(ctx: CanvasRenderingContext2D) {
   }
 }
 
-const GLOVE_SIZE = 32;
-/** Fingertip / knuckle — the pixel that tracks the pointer. */
-const OPEN_HOT: [number, number] = [9, 2];
-const FIST_HOT: [number, number] = [9, 5];
-
-function roundFinger(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
-  ctx.beginPath();
-  ctx.roundRect(x, y, w, h, 2);
-  ctx.fill();
-}
-
 function paintGlove(closed: boolean) {
   const c = document.createElement("canvas");
   c.width = GLOVE_SIZE;
   c.height = GLOVE_SIZE;
   const g = c.getContext("2d");
   if (!g) return c;
-  g.fillStyle = "#ffffff";
-  if (!closed) {
-    roundFinger(g, 1, 9, 4, 11);
-    roundFinger(g, 8, 2, 5, 15);
-    roundFinger(g, 16, 8, 4, 11);
-    roundFinger(g, 23, 11, 4, 8);
-    g.beginPath();
-    g.ellipse(15, 23, 11, 7, 0, 0, Math.PI * 2);
-    g.fill();
-    g.beginPath();
-    g.roundRect(7, 24, 16, 7, 2);
-    g.fill();
-    g.beginPath();
-    g.ellipse(4, 20, 4.5, 4.5, 0, 0, Math.PI * 2);
-    g.fill();
-  } else {
-    g.beginPath();
-    g.ellipse(16, 19, 10, 9, 0, 0, Math.PI * 2);
-    g.fill();
-    g.beginPath();
-    g.ellipse(6, 19, 5, 5, 0, 0, Math.PI * 2);
-    g.fill();
-    g.beginPath();
-    g.roundRect(9, 22, 14, 8, 2);
-    g.fill();
-    g.beginPath();
-    g.ellipse(10, 8, 3.2, 3.2, 0, 0, Math.PI * 2);
-    g.fill();
-  }
-  const img = g.getImageData(0, 0, GLOVE_SIZE, GLOVE_SIZE);
-  const src = new Uint8ClampedArray(img.data);
-  const out = img.data;
-  for (let y = 0; y < GLOVE_SIZE; y++) {
-    for (let x = 0; x < GLOVE_SIZE; x++) {
-      const i = (y * GLOVE_SIZE + x) * 4;
-      if (src[i + 3]! > 128) {
-        const cuff = y > 23;
-        out[i] = cuff ? 214 : 247;
-        out[i + 1] = cuff ? 208 : 243;
-        out[i + 2] = cuff ? 196 : 234;
-        out[i + 3] = 255;
-        continue;
-      }
-      let edge = false;
-      for (let dy = -1; dy <= 1 && !edge; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          const nx = x + dx;
-          const ny = y + dy;
-          if (nx < 0 || ny < 0 || nx >= GLOVE_SIZE || ny >= GLOVE_SIZE) continue;
-          if (src[(ny * GLOVE_SIZE + nx) * 4 + 3]! > 128) edge = true;
-        }
-      }
-      if (edge) {
-        out[i] = 42;
-        out[i + 1] = 24;
-        out[i + 2] = 16;
-        out[i + 3] = 255;
-      }
+  const mask = gloveMask(closed);
+  const img = g.createImageData(GLOVE_SIZE, GLOVE_SIZE);
+  for (let i = 0; i < mask.length; i++) {
+    const v = mask[i]!;
+    const o = i * 4;
+    if (v === 0) continue;
+    if (v === 3) {
+      img.data[o] = 36;
+      img.data[o + 1] = 22;
+      img.data[o + 2] = 16;
+    } else if (v === 2) {
+      img.data[o] = 214;
+      img.data[o + 1] = 206;
+      img.data[o + 2] = 196;
+    } else {
+      img.data[o] = 250;
+      img.data[o + 1] = 248;
+      img.data[o + 2] = 244;
     }
+    img.data[o + 3] = 255;
   }
   g.putImageData(img, 0, 0);
   return c;
@@ -261,7 +212,7 @@ export function drawGlove(
   grabbing: boolean,
   scale = 1,
 ) {
-  const hot = grabbing ? FIST_HOT : OPEN_HOT;
+  const hot = glovePose(grabbing).hot;
   const size = GLOVE_SIZE * scale;
   ctx.drawImage(
     gloveSprite(grabbing),

@@ -17,7 +17,7 @@ function snapshot() {
     zoom: s.zoom,
     torn: s.torn,
     head: { x: 0, y: 1.42, z: 0.08, rot: s.headRot },
-    glove: { on: s.gloveOn, x: s.gloveX, y: s.gloveY },
+    glove: { on: s.gloveOn, x: s.gloveX, y: s.gloveY, pinch: s.pointerDown },
     joints: s.jointOffsets,
     grabLocal: s.grabLocal,
   });

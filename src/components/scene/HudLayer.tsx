@@ -40,7 +40,7 @@ export function HudLayer() {
             on: s.gloveOn,
             x: s.gloveX,
             y: s.gloveY,
-            grabbing: s.grabbing,
+            grabbing: s.pointerDown,
           },
           {
             boardY: bitmap.boardY,
@@ -66,15 +66,21 @@ export function HudLayer() {
         e.clientX >= r.left && e.clientX < r.right && e.clientY >= r.top && e.clientY < r.bottom;
       if (!inside) {
         useFaceStore.getState().setGlove(false);
+        useFaceStore.getState().setPointerDown(false);
         return;
       }
       const bitmap = hudBitmapSize(r.width, r.height);
       const x = ((e.clientX - r.left) / r.width) * bitmap.w;
       const y = ((e.clientY - r.top) / r.height) * bitmap.h - bitmap.boardY;
       useFaceStore.getState().setGlove(true, x, y);
+      useFaceStore.getState().setPointerDown((e.buttons & 1) !== 0);
     };
-    const hide = () => useFaceStore.getState().setGlove(false);
+    const hide = () => {
+      useFaceStore.getState().setGlove(false);
+      useFaceStore.getState().setPointerDown(false);
+    };
     const release = (e: PointerEvent) => {
+      useFaceStore.getState().setPointerDown(false);
       if (coarse) hide();
       else place(e);
     };

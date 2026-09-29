@@ -25,6 +25,8 @@ export const useFaceStore = create<{
   gloveX: number;
   gloveY: number;
   setGlove: (on: boolean, x?: number, y?: number) => void;
+  pointerDown: boolean;
+  setPointerDown: (v: boolean) => void;
 }>((set) => ({
   resetToken: 0,
   requestReset: () =>
@@ -68,4 +70,6 @@ export const useFaceStore = create<{
       gloveX: x ?? s.gloveX,
       gloveY: y ?? s.gloveY,
     })),
+  pointerDown: false,
+  setPointerDown: (v) => set({ pointerDown: v }),
 }));

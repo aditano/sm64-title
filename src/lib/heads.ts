@@ -1,5 +1,6 @@
 import * as THREE from "three";
-import { cyl, place, sph, type EyeSpec } from "./geom";
+import { MARIO_JOINTS } from "./face-deform.mjs";
+import { box, mergeParts, place, sph, type EyeSpec } from "./geom";
 import type { PinchId } from "./face-store";
 
 export type PinchJoint = {
@@ -13,6 +14,8 @@ export type HeadPart = {
   color: string;
   map?: THREE.Texture;
   unlit?: boolean;
+  emissive?: string;
+  emissiveIntensity?: number;
 };
 
 export type BuiltHead = {
@@ -21,145 +24,165 @@ export type BuiltHead = {
   joints: PinchJoint[];
 };
 
-export const SKIN = "#E39B6C";
-const HAT = "#E52521";
-const HAIR = "#3A2218";
-const STASH = "#2E1A10";
-const MOUTH = "#6A241C";
+export const SKIN = "#FFD2A4";
+const HAT = "#FF1010";
+const STASH = "#14110E";
+const BROW = "#120E0C";
+const LIP = "#E81818";
+const MOUTH_HOLE = "#3A0C0C";
+const TOOTH = "#F7F4EE";
 
-function part(geo: THREE.BufferGeometry, color: string, map?: THREE.Texture, unlit?: boolean): HeadPart {
+function part(
+  geo: THREE.BufferGeometry,
+  color: string,
+  map?: THREE.Texture,
+  unlit?: boolean,
+  emissive?: string,
+  emissiveIntensity?: number,
+): HeadPart {
   geo.computeVertexNormals();
-  return { geometry: geo, color, map, unlit };
+  return { geometry: geo, color, map, unlit, emissive, emissiveIntensity };
 }
 
-function pull(v: THREE.Vector3, cx: number, cy: number, cz: number, r: number, amt: number) {
-  const dx = v.x - cx;
-  const dy = v.y - cy;
-  const dz = v.z - cz;
-  const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
-  if (d >= r || d < 1e-6) return;
-  const t = 1 - d / r;
-  const w = t * t * (3 - 2 * t);
-  const k = (amt * w) / d;
-  v.x += dx * k;
-  v.y += dy * k;
-  v.z += dz * k;
+function joint(id: PinchId) {
+  const found = MARIO_JOINTS.find((j) => j.id === id);
+  if (!found) throw new Error(id);
+  return found.position;
 }
 
-function dentZ(v: THREE.Vector3, cx: number, cy: number, cz: number, r: number, amt: number) {
-  const dx = v.x - cx;
-  const dy = v.y - cy;
-  const dz = v.z - cz;
-  const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
-  if (d >= r) return;
-  const t = 1 - d / r;
-  const w = t * t * (3 - 2 * t);
-  v.z -= amt * w;
-}
-
-/** Side-profile lathe, then cheek/chin/socket displacement. */
+/** Round Mario cranium: wide cheeks, blended nose root, eye sockets, short chin. */
 function sculptCranium() {
-  const pts = [
-    new THREE.Vector2(0.0, -0.84),
-    new THREE.Vector2(0.16, -0.82),
-    new THREE.Vector2(0.34, -0.74),
-    new THREE.Vector2(0.5, -0.54),
-    new THREE.Vector2(0.62, -0.28),
-    new THREE.Vector2(0.7, -0.02),
-    new THREE.Vector2(0.74, 0.22),
-    new THREE.Vector2(0.7, 0.42),
-    new THREE.Vector2(0.56, 0.6),
-    new THREE.Vector2(0.34, 0.72),
-    new THREE.Vector2(0.0, 0.76),
-  ];
-  const geo = new THREE.LatheGeometry(pts, 48);
+  const geo = new THREE.SphereGeometry(0.78, 36, 28);
   const pos = geo.getAttribute("position") as THREE.BufferAttribute;
   const v = new THREE.Vector3();
   for (let i = 0; i < pos.count; i++) {
     v.fromBufferAttribute(pos, i);
-    v.x *= 1.22;
-    v.z *= 1.08;
+    const len = v.length() || 1;
+    let x = v.x / len;
+    let y = v.y / len;
+    let z = v.z / len;
 
-    pull(v, 0.5, -0.12, 0.48, 0.42, 0.2);
-    pull(v, -0.5, -0.12, 0.48, 0.42, 0.2);
-    pull(v, 0, -0.78, 0.34, 0.4, 0.26);
-    pull(v, 0, 0.32, 0.5, 0.38, 0.12);
-    dentZ(v, -0.26, 0.16, 0.64, 0.22, 0.16);
-    dentZ(v, 0.26, 0.16, 0.64, 0.22, 0.16);
-    pull(v, -0.82, 0.02, 0.12, 0.2, 0.16);
-    pull(v, 0.82, 0.02, 0.12, 0.2, 0.16);
-    if (v.y > 0.52) {
-      const f = (v.y - 0.52) / 0.32;
-      v.y -= f * 0.1;
-      v.x *= 1 - f * 0.08;
-      v.z *= 1 - f * 0.1;
+    let radius = 0.8;
+    if (y < -0.15) {
+      const t = Math.min(1, (-y - 0.15) / 0.85);
+      radius *= 1 - t * 0.06;
     }
-    pos.setXYZ(i, v.x, v.y, v.z);
+    x *= radius * 1.18;
+    y *= radius * 1.06;
+    z *= radius * 0.94;
+
+    const cheek = Math.exp(-((Math.abs(x) - 0.46) ** 2) / 0.06) * Math.exp(-((y + 0.02) ** 2) / 0.09);
+    if (z > 0) z += cheek * 0.1;
+
+    const nose = Math.exp(-(x * x) / 0.08) * Math.exp(-((y + 0.12) ** 2) / 0.08);
+    if (z > 0) z += nose * 0.06;
+
+    for (const sx of [-0.52, 0.52]) {
+      const sock = Math.exp(-((x - sx) ** 2) / 0.035) * Math.exp(-((y - 0.08) ** 2) / 0.028);
+      if (z > 0.15) z -= sock * 0.035;
+    }
+
+    if (y > 0.38) {
+      const f = Math.min(1, (y - 0.38) / 0.45);
+      y -= f * 0.05;
+    }
+
+    pos.setXYZ(i, x, y, z);
   }
   geo.computeVertexNormals();
   return geo;
 }
 
-function sculptHat() {
-  const pts = [
-    new THREE.Vector2(0.0, 1.08),
-    new THREE.Vector2(0.2, 1.06),
-    new THREE.Vector2(0.48, 0.98),
-    new THREE.Vector2(0.7, 0.82),
-    new THREE.Vector2(0.84, 0.62),
-    new THREE.Vector2(0.9, 0.46),
-    new THREE.Vector2(0.94, 0.38),
-    new THREE.Vector2(0.96, 0.34),
-    new THREE.Vector2(0.9, 0.33),
-    new THREE.Vector2(0.72, 0.36),
-  ];
-  const geo = new THREE.LatheGeometry(pts, 36);
-  geo.scale(1.05, 1, 1.02);
-  geo.translate(0, 0.0, -0.04);
+/** Cap crown stops above the eyes. The visor is only on the front. */
+function sculptCrown() {
+  const geo = new THREE.SphereGeometry(0.9, 32, 16, 0, Math.PI * 2, 0, Math.PI * 0.5);
+  geo.scale(1.16, 0.9, 1.06);
+  geo.translate(0, 0.4, -0.04);
   geo.computeVertexNormals();
   return geo;
 }
 
-function omegaMustache() {
+/** Front-only visor. +X rotation swings the ellipse out toward the camera. */
+function capBrim() {
+  const shape = new THREE.Shape();
+  shape.moveTo(-0.78, 0);
+  shape.quadraticCurveTo(0, 0.4, 0.78, 0);
+  shape.quadraticCurveTo(0, 0.05, -0.78, 0);
+  const geo = new THREE.ExtrudeGeometry(shape, {
+    depth: 0.14,
+    bevelEnabled: true,
+    bevelThickness: 0.02,
+    bevelSize: 0.02,
+    bevelSegments: 1,
+    curveSegments: 12,
+  });
+  geo.rotateX(1.05);
+  geo.translate(0, 0.36, 0.52);
+  geo.computeVertexNormals();
+  return geo;
+}
+
+function brow(side: 1 | -1) {
+  const s = side;
   const curve = new THREE.CatmullRomCurve3([
-    new THREE.Vector3(-0.5, 0.02, 0.42),
-    new THREE.Vector3(-0.46, -0.14, 0.7),
-    new THREE.Vector3(-0.28, -0.26, 0.86),
-    new THREE.Vector3(-0.1, -0.2, 0.9),
-    new THREE.Vector3(0, -0.12, 0.88),
-    new THREE.Vector3(0.1, -0.2, 0.9),
-    new THREE.Vector3(0.28, -0.26, 0.86),
-    new THREE.Vector3(0.46, -0.14, 0.7),
-    new THREE.Vector3(0.5, 0.02, 0.42),
+    new THREE.Vector3(s * 0.24, 0.14, 0.94),
+    new THREE.Vector3(s * 0.44, 0.26, 0.92),
+    new THREE.Vector3(s * 0.66, 0.12, 0.76),
   ]);
-  return new THREE.TubeGeometry(curve, 40, 0.145, 10, false);
+  return new THREE.TubeGeometry(curve, 12, 0.062, 7, false);
+}
+
+/** Brown hair in front of the ear. The outer ear stays skin; this runs from the brim down the cheek. */
+function sideburn(side: 1 | -1) {
+  const s = side;
+  return mergeParts([
+    place(sph(0.1, 10, 8), s * 0.8, 0.28, 0.72, 0.9, 1.35, 0.55),
+    place(sph(0.1, 10, 8), s * 0.84, -0.02, 0.66, 0.62, 2.15, 0.5),
+  ]);
+}
+
+function mustache() {
+  const r = 0.13;
+  const lobes: [number, number, number, number, number, number][] = [
+    [-0.62, -0.46, 0.4, 1.1, 0.9, 0.65],
+    [-0.42, -0.56, 0.56, 1.4, 1, 0.8],
+    [-0.18, -0.52, 0.68, 0.95, 0.78, 0.65],
+    [0, -0.62, 0.6, 0.7, 0.55, 0.5],
+    [0.18, -0.52, 0.68, 0.95, 0.78, 0.65],
+    [0.42, -0.56, 0.56, 1.4, 1, 0.8],
+    [0.62, -0.46, 0.4, 1.1, 0.9, 0.65],
+  ];
+  return mergeParts(lobes.map(([x, y, z, sx, sy, sz]) => place(sph(r, 12, 10), x, y, z, sx, sy, sz)));
 }
 
 function makeEmblemMap() {
   const c = document.createElement("canvas");
-  c.width = 64;
-  c.height = 64;
+  c.width = 128;
+  c.height = 128;
   const ctx = c.getContext("2d");
   if (!ctx) throw new Error("2d");
-  ctx.clearRect(0, 0, 64, 64);
-  ctx.fillStyle = "#F7F7F7";
+  ctx.clearRect(0, 0, 128, 128);
+  ctx.fillStyle = "#F4F4F4";
   ctx.beginPath();
-  ctx.arc(32, 32, 30, 0, Math.PI * 2);
+  ctx.arc(64, 64, 58, 0, Math.PI * 2);
   ctx.fill();
-  ctx.fillStyle = "#DC1C1C";
+  ctx.strokeStyle = "#C01010";
+  ctx.lineWidth = 7;
+  ctx.stroke();
+  ctx.fillStyle = "#E10600";
   ctx.beginPath();
-  ctx.moveTo(12, 50);
-  ctx.lineTo(12, 13);
-  ctx.lineTo(22, 13);
-  ctx.lineTo(32, 32);
-  ctx.lineTo(42, 13);
-  ctx.lineTo(52, 13);
-  ctx.lineTo(52, 50);
-  ctx.lineTo(42, 50);
-  ctx.lineTo(42, 28);
-  ctx.lineTo(32, 44);
-  ctx.lineTo(22, 28);
-  ctx.lineTo(22, 50);
+  ctx.moveTo(24, 98);
+  ctx.lineTo(24, 30);
+  ctx.lineTo(44, 30);
+  ctx.lineTo(64, 60);
+  ctx.lineTo(84, 30);
+  ctx.lineTo(104, 30);
+  ctx.lineTo(104, 98);
+  ctx.lineTo(84, 98);
+  ctx.lineTo(84, 54);
+  ctx.lineTo(64, 82);
+  ctx.lineTo(44, 54);
+  ctx.lineTo(44, 98);
   ctx.closePath();
   ctx.fill();
   const t = new THREE.CanvasTexture(c);
@@ -171,46 +194,57 @@ function makeEmblemMap() {
   return t;
 }
 
+function skin(geo: THREE.BufferGeometry) {
+  return part(geo, SKIN, undefined, false, "#F0A86A", 0.42);
+}
+
 export function buildMario(): BuiltHead {
   const parts: HeadPart[] = [];
+  const nose = joint("nose");
+  const earL = joint("earL");
+  const earR = joint("earR");
 
-  parts.push(part(sculptCranium(), SKIN));
-  parts.push(part(place(sph(0.22, 14, 10), -0.9, 0.02, 0.16, 0.5, 1.2, 0.78), SKIN));
-  parts.push(part(place(sph(0.22, 14, 10), 0.9, 0.02, 0.16, 0.5, 1.2, 0.78), SKIN));
+  parts.push(skin(sculptCranium()));
 
-  parts.push(part(place(sph(0.34, 20, 16), 0, -0.08, 0.9, 1.08, 0.92, 1.18), SKIN));
-  parts.push(part(place(sph(0.12, 10, 8), 0, 0.04, 0.82, 0.85, 0.45, 0.55), SKIN));
+  // Tip of the bulb sits on the nose joint so a pull elongates the nose.
+  parts.push(skin(place(sph(0.28, 22, 16), nose[0], nose[1] - 0.02, nose[2] - 0.3, 1.38, 0.92, 1.2)));
 
-  parts.push(part(place(sph(0.1, 8, 6), 0, -0.5, 0.52, 1.2, 0.28, 0.4), MOUTH));
+  parts.push(skin(place(sph(0.28, 14, 12), earL[0] + 0.02, earL[1], earL[2], 0.42, 1.18, 0.5)));
+  parts.push(skin(place(sph(0.28, 14, 12), earR[0] - 0.02, earR[1], earR[2], 0.42, 1.18, 0.5)));
+  parts.push(part(place(sph(0.12, 8, 6), earL[0] - 0.02, earL[1], earL[2] + 0.05, 0.32, 0.72, 0.26), "#E8A06A", undefined, true));
+  parts.push(part(place(sph(0.12, 8, 6), earR[0] + 0.02, earR[1], earR[2] + 0.05, 0.32, 0.72, 0.26), "#E8A06A", undefined, true));
 
-  parts.push(part(omegaMustache(), STASH));
-  parts.push(part(place(sph(0.19, 12, 10), -0.34, -0.22, 0.78, 1.4, 0.52, 0.72), STASH));
-  parts.push(part(place(sph(0.19, 12, 10), 0.34, -0.22, 0.78, 1.4, 0.52, 0.72), STASH));
+  parts.push(part(sideburn(-1), "#8A4A22", undefined, true));
+  parts.push(part(sideburn(1), "#8A4A22", undefined, true));
 
-  parts.push(part(place(sph(0.22, 10, 8), -0.62, 0.22, -0.22, 0.7, 0.42, 0.42), HAIR));
-  parts.push(part(place(sph(0.22, 10, 8), 0.62, 0.22, -0.22, 0.7, 0.42, 0.42), HAIR));
-  parts.push(part(place(sph(0.18, 8, 6), 0, 0.18, -0.62, 1.05, 0.42, 0.36), HAIR));
+  parts.push(part(brow(-1), BROW, undefined, true));
+  parts.push(part(brow(1), BROW, undefined, true));
 
-  parts.push(part(sculptHat(), HAT));
-  parts.push(part(place(cyl(0.07, 0.09, 0.07, 10), 0, 1.04, -0.02), HAT));
-  const emblem = new THREE.CircleGeometry(0.23, 22);
-  emblem.rotateX(-0.38);
-  parts.push(part(place(emblem, 0, 0.52, 0.86), "#ffffff", makeEmblemMap(), true));
+  parts.push(part(mustache(), STASH, undefined, true));
+
+  parts.push(part(place(sph(0.14, 14, 10), 0, -0.7, 0.58, 1.7, 0.42, 0.42), LIP, undefined, true));
+  parts.push(part(place(sph(0.06, 8, 6), 0, -0.68, 0.66, 1.15, 0.34, 0.28), MOUTH_HOLE, undefined, true));
+  parts.push(part(place(box(0.07, 0.028, 0.02), 0, -0.655, 0.72), TOOTH, undefined, true));
+
+  parts.push(part(sculptCrown(), HAT));
+  parts.push(part(capBrim(), HAT));
+  parts.push(part(place(sph(0.24, 12, 10), -0.8, 0.14, 0.08, 0.4, 0.72, 0.78), HAT));
+  parts.push(part(place(sph(0.24, 12, 10), 0.8, 0.14, 0.08, 0.4, 0.72, 0.78), HAT));
+
+  const emblem = new THREE.CircleGeometry(0.2, 28);
+  emblem.rotateX(-0.42);
+  parts.push(part(place(emblem, 0, 0.7, 1.02), "#ffffff", makeEmblemMap(), true));
 
   return {
     parts,
     eyes: [
-      { position: [-0.26, 0.16, 0.68], scale: [0.2, 0.26, 0.13], iris: "#1A54C8" },
-      { position: [0.26, 0.16, 0.68], scale: [0.2, 0.26, 0.13], iris: "#1A54C8" },
+      { position: [-0.52, 0.08, 0.84], scale: [0.22, 0.28, 0.15], iris: "#1868F5" },
+      { position: [0.52, 0.08, 0.84], scale: [0.22, 0.28, 0.15], iris: "#1868F5" },
     ],
-    joints: [
-      { id: "cap", position: [0, 0.52, 0.86], radius: 0.4 },
-      { id: "earL", position: [-0.9, 0.02, 0.16], radius: 0.3 },
-      { id: "earR", position: [0.9, 0.02, 0.16], radius: 0.3 },
-      { id: "nose", position: [0, -0.08, 0.9], radius: 0.3 },
-      { id: "stacheL", position: [-0.34, -0.22, 0.78], radius: 0.26 },
-      { id: "stacheR", position: [0.34, -0.22, 0.78], radius: 0.26 },
-      { id: "mouth", position: [0, -0.48, 0.58], radius: 0.28 },
-    ],
+    joints: MARIO_JOINTS.map((j) => ({
+      id: j.id,
+      position: [j.position[0], j.position[1], j.position[2]],
+      radius: j.radius,
+    })),
   };
 }

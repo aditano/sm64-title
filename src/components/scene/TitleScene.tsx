@@ -37,7 +37,7 @@ function Lights() {
       <hemisphereLight args={["#fff1d4", "#4a7a30", 0.22]} />
       <ambientLight intensity={0.12} />
       <directionalLight position={[4.5, 6.5, 8]} intensity={1.45} color="#fff4dc" />
-      <pointLight position={[0.6, 2.4, 5.4]} intensity={0.55} color="#ffe8c8" distance={12} />
+      <pointLight position={[0.2, 2.1, 4.4]} intensity={1.15} color="#fff2d8" distance={14} />
       <directionalLight position={[-6, 1.2, 4]} intensity={0.16} color="#6a9cc8" />
       <directionalLight position={[0, -2, 5]} intensity={0.1} color="#c89060" />
     </>

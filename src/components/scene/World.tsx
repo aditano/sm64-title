@@ -206,13 +206,14 @@ export function World() {
           <meshLambertMaterial color="#2a1810" flatShading />
         </mesh>
 
-        <mesh position={[0, 5.6, 4.36]}>
-          <circleGeometry args={[1.35, 16]} />
+        {/* Front of the left tower. The centered circle sat behind the cap and the logo. */}
+        <mesh position={[-5.42, 4.95, 5.7]}>
+          <circleGeometry args={[0.82, 20]} />
           <meshBasicMaterial map={glass} toneMapped={false} />
         </mesh>
-        <mesh position={[0, 5.6, 4.34]}>
-          <ringGeometry args={[1.35, 1.55, 16]} />
-          <meshLambertMaterial color="#c4a056" flatShading />
+        <mesh position={[-5.42, 4.95, 5.66]}>
+          <ringGeometry args={[0.82, 1.02, 20]} />
+          <meshBasicMaterial color="#c4a056" toneMapped={false} />
         </mesh>
 
         <MushroomWindow position={[-2.35, 4.5, 4.36]} />

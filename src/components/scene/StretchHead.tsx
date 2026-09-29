@@ -3,7 +3,8 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { buildMario, SKIN, type PinchJoint } from "@/lib/heads";
 import { useFaceStore, type PinchId } from "@/lib/face-store";
-import { gameTime } from "@/lib/game-clock";
+import { deformInto, emptyVecs, pupilOffset, springStep } from "@/lib/face-deform.mjs";
+import { gameTime, N64_H, N64_W } from "@/lib/game-clock";
 import { Sparkles } from "./Sparkles";
 
 const _ray = new THREE.Raycaster();
@@ -19,16 +20,6 @@ const _eyeOff = new THREE.Vector3();
 
 type EyeBind = { group: THREE.Group; rest: THREE.Vector3; idx: number };
 type PartBind = { mesh: THREE.Mesh; rest: Float32Array };
-
-const ZERO: Record<PinchId, THREE.Vector3> = {
-  cap: new THREE.Vector3(),
-  earL: new THREE.Vector3(),
-  earR: new THREE.Vector3(),
-  nose: new THREE.Vector3(),
-  stacheL: new THREE.Vector3(),
-  stacheR: new THREE.Vector3(),
-  mouth: new THREE.Vector3(),
-};
 
 function pointerNdc(e: PointerEvent, el: HTMLElement, out: THREE.Vector2) {
   const r = el.getBoundingClientRect();
@@ -71,49 +62,14 @@ function pickJoint(joints: PinchJoint[], p: THREE.Vector3) {
   return bestD < limit * limit ? best : null;
 }
 
-function deform(rest: Float32Array, arr: Float32Array, joints: PinchJoint[], offsets: Record<PinchId, THREE.Vector3>) {
-  const count = rest.length / 3;
-  for (let i = 0; i < count; i++) {
-    const ix = i * 3;
-    const rx = rest[ix]!;
-    const ry = rest[ix + 1]!;
-    const rz = rest[ix + 2]!;
-    let dx = 0;
-    let dy = 0;
-    let dz = 0;
-    for (const j of joints) {
-      const jx = rx - j.position[0];
-      const jy = ry - j.position[1];
-      const jz = rz - j.position[2];
-      const dist = Math.sqrt(jx * jx + jy * jy + jz * jz);
-      if (dist >= j.radius) continue;
-      const t = 1 - dist / j.radius;
-      const w = t * t * (3 - 2 * t);
-      const o = offsets[j.id];
-      dx += o.x * w;
-      dy += o.y * w;
-      dz += o.z * w;
-    }
-    arr[ix] = rx + dx;
-    arr[ix + 1] = ry + dy;
-    arr[ix + 2] = rz + dz;
-  }
-}
-
 export function StretchHead() {
   const groupRef = useRef<THREE.Group>(null);
   const sparkRef = useRef<{ burst: (p: THREE.Vector3, n?: number, red?: boolean) => void }>(null);
   const built = useMemo(() => buildMario(), []);
   const bindsRef = useRef<PartBind[]>([]);
-  const offsets = useRef<Record<PinchId, THREE.Vector3>>({
-    cap: new THREE.Vector3(),
-    earL: new THREE.Vector3(),
-    earR: new THREE.Vector3(),
-    nose: new THREE.Vector3(),
-    stacheL: new THREE.Vector3(),
-    stacheR: new THREE.Vector3(),
-    mouth: new THREE.Vector3(),
-  });
+  const offsets = useRef(emptyVecs());
+  const velocities = useRef(emptyVecs());
+  const springAcc = useRef(0);
   const grabId = useRef<PinchId | null>(null);
   const eyeBinds = useRef<EyeBind[]>([]);
   const idle = useRef(0);
@@ -126,16 +82,20 @@ export function StretchHead() {
   const materials = useMemo(() => {
     const map = new Map<string, THREE.Material>();
     for (const p of built.parts) {
-      const key = p.unlit ? `${p.color}:unlit` : p.map ? `${p.color}:map` : p.color;
+      const key = `${p.color}:${p.unlit ? "u" : "l"}:${p.map ? "m" : ""}:${p.emissive ?? ""}:${p.emissiveIntensity ?? 0}`;
       if (map.has(key)) continue;
       if (p.unlit) {
         map.set(key, new THREE.MeshBasicMaterial({ color: p.color, map: p.map, fog: false }));
       } else {
         map.set(
           key,
-          p.map
-            ? new THREE.MeshLambertMaterial({ color: p.color, map: p.map, flatShading: false })
-            : new THREE.MeshLambertMaterial({ color: p.color, flatShading: false }),
+          new THREE.MeshLambertMaterial({
+            color: p.color,
+            map: p.map,
+            emissive: p.emissive ?? "#000000",
+            emissiveIntensity: p.emissiveIntensity ?? 0,
+            flatShading: false,
+          }),
         );
       }
     }
@@ -163,23 +123,44 @@ export function StretchHead() {
       const eg = new THREE.Group();
       eg.userData.eye = true;
       eg.position.set(...spec.position);
+      const rim = new THREE.Mesh(
+        new THREE.SphereGeometry(1, 14, 10),
+        new THREE.MeshBasicMaterial({ color: "#14110E" }),
+      );
+      rim.scale.set(spec.scale[0] * 1.16, spec.scale[1] * 1.1, spec.scale[2] * 0.72);
+      rim.position.z = -spec.scale[2] * 0.2;
       const white = new THREE.Mesh(
-        new THREE.SphereGeometry(1, 12, 10),
-        new THREE.MeshLambertMaterial({ color: "#F7F4EE" }),
+        new THREE.SphereGeometry(1, 16, 12),
+        new THREE.MeshBasicMaterial({ color: "#F7F7F4" }),
       );
       white.scale.set(...spec.scale);
       const iris = new THREE.Mesh(
-        new THREE.SphereGeometry(0.48, 10, 8),
-        new THREE.MeshLambertMaterial({ color: spec.iris }),
+        new THREE.SphereGeometry(0.64, 14, 12),
+        new THREE.MeshBasicMaterial({ color: spec.iris }),
       );
-      iris.position.z = spec.scale[2] * 0.72;
-      iris.scale.setScalar(spec.scale[0] * 0.62);
+      iris.position.z = spec.scale[2] * 0.62;
+      iris.scale.set(spec.scale[0], spec.scale[1] * 0.92, spec.scale[2] * 0.7);
+      iris.userData.look = true;
+      iris.userData.restX = 0;
+      iris.userData.restY = 0;
       const pupil = new THREE.Mesh(
-        new THREE.SphereGeometry(0.24, 8, 6),
-        new THREE.MeshLambertMaterial({ color: "#1A1410" }),
+        new THREE.SphereGeometry(0.3, 12, 10),
+        new THREE.MeshBasicMaterial({ color: "#101010" }),
       );
       pupil.position.z = spec.scale[2] * 1.05;
-      pupil.scale.setScalar(spec.scale[0] * 0.32);
+      pupil.scale.set(spec.scale[0], spec.scale[1] * 0.92, spec.scale[2] * 0.55);
+      pupil.userData.look = true;
+      pupil.userData.restX = 0;
+      pupil.userData.restY = 0;
+      const glint = new THREE.Mesh(
+        new THREE.SphereGeometry(0.1, 6, 6),
+        new THREE.MeshBasicMaterial({ color: "#FFFFFF" }),
+      );
+      glint.position.set(spec.scale[0] * 0.28, spec.scale[1] * 0.32, spec.scale[2] * 1.35);
+      glint.scale.setScalar(spec.scale[0] * 0.28);
+      glint.userData.look = true;
+      glint.userData.restX = glint.position.x;
+      glint.userData.restY = glint.position.y;
       const lid = new THREE.Mesh(
         new THREE.SphereGeometry(1.06, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.48),
         new THREE.MeshLambertMaterial({ color: SKIN }),
@@ -190,7 +171,7 @@ export function StretchHead() {
       lid.visible = false;
       lid.userData.lid = true;
       lid.userData.lidSy = spec.scale[1] * 0.04;
-      eg.add(white, iris, pupil, lid);
+      eg.add(rim, white, iris, pupil, glint, lid);
       group.add(eg);
       const rest = new THREE.Vector3(...spec.position);
       bindsEyes.push({
@@ -222,8 +203,14 @@ export function StretchHead() {
 
   useEffect(() => {
     for (const id of Object.keys(offsets.current) as PinchId[]) {
-      offsets.current[id].set(0, 0, 0);
+      offsets.current[id][0] = 0;
+      offsets.current[id][1] = 0;
+      offsets.current[id][2] = 0;
+      velocities.current[id][0] = 0;
+      velocities.current[id][1] = 0;
+      velocities.current[id][2] = 0;
     }
+    springAcc.current = 0;
     grabId.current = null;
     useFaceStore.getState().setGrabbing(false);
     useFaceStore.getState().setPinchId(null);
@@ -276,13 +263,19 @@ export function StretchHead() {
       if (!_ray.ray.intersectPlane(_plane, _hit)) return;
       group.worldToLocal(_target.copy(_hit));
       _off.copy(_target).sub(_local.set(...joint.position));
-      const max = useFaceStore.getState().torn ? 2.4 : 1.55;
+      const max = 2.45;
       if (_off.length() > max) _off.setLength(max);
       if (_off.length() > 1.7) {
         useFaceStore.getState().setTorn(true);
         sparkRef.current?.burst(_target, 10, true);
       }
-      offsets.current[id].copy(_off);
+      const o = offsets.current[id];
+      o[0] = _off.x;
+      o[1] = _off.y;
+      o[2] = _off.z;
+      velocities.current[id][0] = 0;
+      velocities.current[id][1] = 0;
+      velocities.current[id][2] = 0;
       useFaceStore.getState().setGrabLocal([_target.x, _target.y, _target.z]);
     };
 
@@ -316,15 +309,11 @@ export function StretchHead() {
     const d = gameTime.lastDt || 1 / 60;
     const group = groupRef.current;
     if (!group) return;
-    const locked = holdStretch || !!grabId.current;
-
     idle.current += d;
     if (!grabId.current) {
-      const yaw = Math.sin(idle.current * 0.42) * 0.16 + Math.sin(idle.current * 0.13) * 0.06;
-      const pitch = Math.sin(idle.current * 0.31) * 0.045;
-      group.rotation.y = yaw;
-      group.rotation.x = pitch;
-      useFaceStore.getState().setHeadRot([pitch, yaw, 0]);
+      group.rotation.y = 0;
+      group.rotation.x = 0;
+      useFaceStore.getState().setHeadRot([0, 0, 0]);
     }
 
     blink.current += d;
@@ -336,11 +325,15 @@ export function StretchHead() {
       nextBlink.current = 1.8 + (Math.sin(idle.current * 7.1) * 0.5 + 0.5) * 3.2;
     }
 
-    if (!locked) {
-      const stiff = useFaceStore.getState().torn ? 7 : 14;
-      for (const id of Object.keys(offsets.current) as PinchId[]) {
-        offsets.current[id].lerp(ZERO[id], 1 - Math.exp(-stiff * d));
-      }
+    springAcc.current += d * 30;
+    let steps = 0;
+    while (springAcc.current >= 1 && steps < 3) {
+      springStep(offsets.current, velocities.current, {
+        hold: holdStretch,
+        grabbingId: grabId.current,
+      });
+      springAcc.current -= 1;
+      steps += 1;
     }
 
     const snapshot: Record<PinchId, [number, number, number]> = {
@@ -353,8 +346,8 @@ export function StretchHead() {
       mouth: [0, 0, 0],
     };
     for (const j of built.joints) {
-      const o = offsets.current[j.id];
-      snapshot[j.id] = [o.x, o.y, o.z];
+      const o = offsets.current[j.id]!;
+      snapshot[j.id] = [o[0], o[1], o[2]];
     }
     useFaceStore.getState().setJointOffsets(snapshot);
 
@@ -363,7 +356,7 @@ export function StretchHead() {
     for (const b of bindsRef.current) {
       const pos = b.mesh.geometry.getAttribute("position") as THREE.BufferAttribute;
       const arr = pos.array as Float32Array;
-      deform(b.rest, arr, built.joints, offsets.current);
+      deformInto(b.rest, arr, built.joints, offsets.current);
       pos.needsUpdate = true;
       b.mesh.geometry.computeVertexNormals();
       if (!skinRest) {
@@ -372,6 +365,13 @@ export function StretchHead() {
       }
     }
 
+    const glove = useFaceStore.getState();
+    const [lookX, lookY] = pupilOffset(
+      glove.gloveOn ? glove.gloveX : N64_W / 2,
+      glove.gloveOn ? glove.gloveY : N64_H / 2,
+      N64_W,
+      N64_H,
+    );
     for (const b of eyeBinds.current) {
       if (skinRest && skinArr) {
         const ix = b.idx * 3;
@@ -380,6 +380,10 @@ export function StretchHead() {
       }
       b.group.scale.set(1, eyeScaleY, 1);
       for (const child of b.group.children) {
+        if (child.userData.look) {
+          child.position.x = (child.userData.restX as number) + lookX;
+          child.position.y = (child.userData.restY as number) + lookY;
+        }
         if (child.userData.lid) {
           child.visible = eyeScaleY < 0.94;
           child.scale.y = (child.userData.lidSy as number) + (1 - eyeScaleY) * 0.22;
@@ -398,7 +402,11 @@ export function StretchHead() {
         <mesh
           key={i}
           geometry={p.geometry}
-          material={materials.get(p.unlit ? `${p.color}:unlit` : p.map ? `${p.color}:map` : p.color) ?? undefined}
+          material={
+            materials.get(
+              `${p.color}:${p.unlit ? "u" : "l"}:${p.map ? "m" : ""}:${p.emissive ?? ""}:${p.emissiveIntensity ?? 0}`,
+            ) ?? undefined
+          }
           userData={{ deform: true }}
         />
       ))}
