@@ -1,6 +1,7 @@
 {
   "name": "sm64-title",
   "private": true,
+  "license": "GPL-3.0-or-later",
   "sideEffects": false,
   "type": "module",
   "overrides": {
