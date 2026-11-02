@@ -59,10 +59,14 @@ export function UserButton() {
         <img
           src={user.profileImageUrl}
           alt=""
+          aria-hidden="true"
           className="h-8 w-8 rounded-full object-cover"
         />
       ) : (
-        <span className="grid h-8 w-8 place-items-center rounded-full bg-black/10 text-sm font-medium dark:bg-white/20">
+        <span
+          aria-hidden="true"
+          className="grid h-8 w-8 place-items-center rounded-full bg-black/10 text-sm font-medium dark:bg-white/20"
+        >
           {label.charAt(0).toUpperCase()}
         </span>
       )}
@@ -71,7 +75,7 @@ export function UserButton() {
         <button
           type="button"
           onClick={() => void signOut()}
-          className="cursor-pointer text-sm underline-offset-4 opacity-70 hover:underline"
+          className="cursor-pointer text-sm underline-offset-4 opacity-70 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-current"
         >
           Sign out
         </button>
