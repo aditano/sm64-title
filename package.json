@@ -5,7 +5,14 @@
   "sideEffects": false,
   "type": "module",
   "overrides": {
-    "nf3": "0.3.17"
+    "nf3": "0.3.17",
+    "js-yaml": "4.3.2",
+    "minimatch@<9": {
+      "brace-expansion": "1.1.21"
+    },
+    "minimatch@>=9": {
+      "brace-expansion": "5.0.12"
+    }
   },
   "scripts": {
     "dev": "vite dev --host 0.0.0.0 --port 8080",
