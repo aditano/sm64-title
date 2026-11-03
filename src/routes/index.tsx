@@ -10,7 +10,10 @@ export const Route = createFileRoute("/")({
 
 function Home() {
   return (
-    <main className="relative h-dvh w-full overflow-hidden overscroll-none bg-black touch-none">
+    <main
+      className="relative h-dvh w-full overflow-hidden overscroll-none bg-black touch-none"
+      aria-label="Super Mario 64 title screen"
+    >
       <N64Frame>
         {(dpr) => (
           <>
